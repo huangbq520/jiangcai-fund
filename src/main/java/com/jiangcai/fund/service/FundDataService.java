@@ -27,6 +27,59 @@ public class FundDataService {
     }
     
     /**
+     * 搜索基金（按基金代码或基金名称模糊匹配）
+     * @param keyword 基金代码或名称关键词
+     * @return 匹配的基金列表
+     */
+    public List<Map<String, Object>> searchFunds(String keyword) {
+        List<Map<String, Object>> result = new ArrayList<>();
+        try {
+            // 东方财富基金搜索接口
+            String url = "https://fund.eastmoney.com/ajax/search/search?q=" + keyword;
+            
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
+            headers.set("Accept", "application/json");
+            headers.set("Referer", "https://fund.eastmoney.com/");
+            
+            HttpEntity<String> entity = new HttpEntity<>(headers);
+            ResponseEntity<byte[]> response = restTemplate.exchange(url, HttpMethod.GET, entity, byte[].class);
+            String responseBody = new String(response.getBody(), StandardCharsets.UTF_8);
+            
+            if (responseBody != null && responseBody.contains("datas")) {
+                // 解析搜索结果
+                Pattern datasPattern = Pattern.compile("\"datas\":\\s*(\\[.+?\\])");
+                Matcher datasMatcher = datasPattern.matcher(responseBody);
+                
+                if (datasMatcher.find()) {
+                    String datasStr = datasMatcher.group(1);
+                    JsonNode array = objectMapper.readTree(datasStr);
+                    
+                    if (array.isArray()) {
+                        for (JsonNode item : array) {
+                            Map<String, Object> fund = new HashMap<>();
+                            fund.put("fundCode", item.has("FUNDCODE") ? item.get("FUNDCODE").asText() : "");
+                            fund.put("fundName", item.has("SHORTNAME") ? item.get("SHORTNAME").asText() : 
+                                           (item.has("FUNDNAME") ? item.get("FUNDNAME").asText() : ""));
+                            fund.put("type", item.has("FTYPE") ? item.get("FTYPE").asText() : "");
+                            
+                            // 只添加有效的基金（6位代码）
+                            String code = (String) fund.get("fundCode");
+                            if (code != null && code.matches("\\d{6}")) {
+                                result.add(fund);
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        
+        return result;
+    }
+    
+    /**
      * 获取基金实时估值
      */
     public Map<String, Object> getFundQuote(String fundCode) {

@@ -35,6 +35,15 @@ public class FundController {
     }
     
     /**
+     * API: 搜索基金（按名称或代码模糊匹配）
+     */
+    @GetMapping("/api/fund/search")
+    @ResponseBody
+    public List<Map<String, Object>> searchFunds(@RequestParam String keyword) {
+        return fundDataService.searchFunds(keyword);
+    }
+    
+    /**
      * API: 获取基金实时估值
      */
     @GetMapping("/api/fund/quote")

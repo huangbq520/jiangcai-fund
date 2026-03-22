@@ -321,6 +321,57 @@
         .toast.error {
             background: #ef4444;
         }
+        
+        /* 搜索建议 */
+        .search-suggestions {
+            position: absolute;
+            width: calc(100% - 60px);
+            max-height: 300px;
+            overflow-y: auto;
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            z-index: 100;
+            margin-top: -10px;
+        }
+        
+        .suggestion-item {
+            padding: 12px 15px;
+            cursor: pointer;
+            border-bottom: 1px solid #f3f4f6;
+            transition: background 0.2s;
+        }
+        
+        .suggestion-item:last-child {
+            border-bottom: none;
+        }
+        
+        .suggestion-item:hover {
+            background: #f8f9fa;
+        }
+        
+        .suggestion-item .fund-code {
+            font-weight: 600;
+            color: #333;
+            margin-right: 10px;
+        }
+        
+        .suggestion-item .fund-name {
+            color: #666;
+        }
+        
+        .suggestion-item .fund-type {
+            font-size: 12px;
+            color: #999;
+            margin-left: 10px;
+        }
+        
+        .search-loading {
+            padding: 15px;
+            text-align: center;
+            color: #999;
+        }
     </style>
 </head>
 <body>
@@ -333,10 +384,13 @@
         <div class="card">
             <form id="queryForm">
                 <div class="search-box">
-                    <input type="text" id="fundCode" name="fundCode" placeholder="请输入基金代码（如：161039）">
+                    <input type="text" id="fundCode" name="fundCode" placeholder="请输入基金代码或名称（如：161039 或 易方达）" autocomplete="off">
                     <button type="submit">查询</button>
                 </div>
             </form>
+            
+            <!-- 搜索建议列表 -->
+            <div id="searchSuggestions" class="search-suggestions" style="display: none;"></div>
             
             <div id="loading" class="loading" style="display: none;">
                 正在查询，请稍候...
@@ -457,14 +511,108 @@
             e.preventDefault();
             const fundCode = document.getElementById('fundCode').value.trim();
             
-            if (!fundCode || !/^\d{6}$/.test(fundCode)) {
-                showToast('请输入6位基金代码', 'error');
+            // 如果是6位数字，直接查询
+            if (/^\d{6}$/.test(fundCode)) {
+                currentFundCode = fundCode;
+                await queryFund(fundCode);
+                hideSearchSuggestions();
                 return;
             }
             
+            // 如果不是6位数字，尝试搜索
+            if (fundCode.length >= 2) {
+                const results = await searchFunds(fundCode);
+                if (results && results.length > 0) {
+                    // 直接选择第一个结果
+                    currentFundCode = results[0].fundCode;
+                    await queryFund(results[0].fundCode);
+                } else {
+                    showToast('未找到匹配的基金', 'error');
+                }
+            } else {
+                showToast('请输入6位基金代码或至少2个字符', 'error');
+            }
+            hideSearchSuggestions();
+        });
+        
+        // 搜索建议功能
+        let searchTimeout = null;
+        const searchInput = document.getElementById('fundCode');
+        
+        searchInput.addEventListener('input', async (e) => {
+            const keyword = e.target.value.trim();
+            
+            // 清空之前的定时器
+            if (searchTimeout) {
+                clearTimeout(searchTimeout);
+            }
+            
+            // 如果输入太短，隐藏建议
+            if (keyword.length < 2) {
+                hideSearchSuggestions();
+                return;
+            }
+            
+            // 如果是6位数字，不显示建议（直接查询）
+            if (/^\d{6}$/.test(keyword)) {
+                hideSearchSuggestions();
+                return;
+            }
+            
+            // 防抖：300ms后执行搜索
+            searchTimeout = setTimeout(async () => {
+                const results = await searchFunds(keyword);
+                showSearchSuggestions(results);
+            }, 300);
+        });
+        
+        searchInput.addEventListener('blur', () => {
+            // 延迟隐藏，以便点击建议项
+            setTimeout(() => {
+                hideSearchSuggestions();
+            }, 200);
+        });
+        
+        async function searchFunds(keyword) {
+            try {
+                const res = await fetch('/api/fund/search?keyword=' + encodeURIComponent(keyword));
+                return await res.json();
+            } catch (e) {
+                console.error('搜索失败', e);
+                return [];
+            }
+        }
+        
+        function showSearchSuggestions(results) {
+            const container = document.getElementById('searchSuggestions');
+            
+            if (!results || results.length === 0) {
+                container.style.display = 'none';
+                return;
+            }
+            
+            container.innerHTML = results.slice(0, 10).map(fund => `
+                <div class="suggestion-item" onclick="selectFund('${fund.fundCode}')">
+                    <span class="fund-code">${fund.fundCode}</span>
+                    <span class="fund-name">${fund.fundName}</span>
+                    <span class="fund-type">${fund.type || ''}</span>
+                </div>
+            `).join('');
+            
+            container.style.display = 'block';
+        }
+        
+        function hideSearchSuggestions() {
+            document.getElementById('searchSuggestions').style.display = 'none';
+        }
+        
+        // 选择基金
+        window.selectFund = async function(fundCode) {
+            document.getElementById('fundCode').value = fundCode;
+            hideSearchSuggestions();
             currentFundCode = fundCode;
             await queryFund(fundCode);
-        });
+        };
         
         async function queryFund(fundCode) {
             showLoading();
