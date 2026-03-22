@@ -1,5 +1,6 @@
 package com.jiangcai.fund.service;
 
+import com.jiangcai.fund.dto.PortfolioOverview;
 import com.jiangcai.fund.entity.FundStockHolding;
 import com.jiangcai.fund.repository.FundStockHoldingRepository;
 import org.springframework.stereotype.Service;
@@ -26,6 +27,164 @@ public class FundHoldService {
      */
     public List<FundStockHolding> getAllHoldings() {
         return repository.findAll();
+    }
+    
+    /**
+     * 获取持仓概览（含当日收益计算）
+     */
+    public PortfolioOverview getPortfolioOverview() {
+        PortfolioOverview overview = new PortfolioOverview();
+        List<FundStockHolding> holdings = repository.findAll();
+        
+        BigDecimal totalAssets = BigDecimal.ZERO;
+        BigDecimal totalDailyReturn = BigDecimal.ZERO;
+        BigDecimal totalCost = BigDecimal.ZERO;
+        
+        for (FundStockHolding holding : holdings) {
+            // 获取实时估值
+            try {
+                Map<String, Object> fundInfo = fundDataService.getFundQuote(holding.getFundCode());
+                if (Boolean.TRUE.equals(fundInfo.get("success"))) {
+                    BigDecimal currentPrice = (BigDecimal) fundInfo.get("dwjz");
+                    BigDecimal yesterdayNav = (BigDecimal) fundInfo.get("yesterdayNav");
+                    
+                    if (currentPrice != null && currentPrice.compareTo(BigDecimal.ZERO) > 0) {
+                        // 更新当前价格
+                        holding.setCurrentPrice(currentPrice);
+                        
+                        // 计算当前市值
+                        BigDecimal currentValue = holding.getHoldingAmount().multiply(currentPrice)
+                                .setScale(2, RoundingMode.HALF_UP);
+                        holding.setCurrentValue(currentValue);
+                        
+                        // 计算当日收益
+                        if (yesterdayNav != null && yesterdayNav.compareTo(BigDecimal.ZERO) > 0) {
+                            holding.setCurrentPrice(currentPrice);
+                            // 当日收益 = 持有份额 × (当前净值 - 昨日净值)
+                            BigDecimal dailyReturn = holding.getHoldingAmount()
+                                    .multiply(currentPrice.subtract(yesterdayNav))
+                                    .setScale(2, RoundingMode.HALF_UP);
+                            holding.setProfitLoss(dailyReturn);
+                        }
+                        
+                        // 计算持有收益 = 当前市值 - 总成本
+                        BigDecimal profitLoss = currentValue.subtract(holding.getTotalCost())
+                                .setScale(2, RoundingMode.HALF_UP);
+                        holding.setProfitLoss(profitLoss);
+                        
+                        // 计算收益率
+                        if (holding.getTotalCost().compareTo(BigDecimal.ZERO) > 0) {
+                            BigDecimal profitRate = profitLoss.divide(holding.getTotalCost(), 4, RoundingMode.HALF_UP)
+                                    .multiply(new BigDecimal("100"))
+                                    .setScale(2, RoundingMode.HALF_UP);
+                            holding.setProfitRate(profitRate);
+                        }
+                        
+                        totalAssets = totalAssets.add(currentValue);
+                        totalCost = totalCost.add(holding.getTotalCost());
+                        
+                        // 当日收益累加（如果有昨日净值）
+                        Map<String, Object> latestInfo = fundDataService.getFundQuote(holding.getFundCode());
+                        if (latestInfo.containsKey("yesterdayNav")) {
+                            BigDecimal yesterday = (BigDecimal) latestInfo.get("yesterdayNav");
+                            BigDecimal dailyRet = holding.getHoldingAmount()
+                                    .multiply(currentPrice.subtract(yesterday))
+                                    .setScale(2, RoundingMode.HALF_UP);
+                            totalDailyReturn = totalDailyReturn.add(dailyRet);
+                        }
+                        
+                        repository.save(holding);
+                    }
+                }
+            } catch (Exception e) {
+                // 静默处理
+            }
+        }
+        
+        // 设置概览数据
+        overview.setTotalAssets(totalAssets);
+        overview.setFundCount((int) holdings.stream().map(FundStockHolding::getFundCode).distinct().count());
+        overview.setDailyReturn(totalDailyReturn);
+        
+        // 计算当日涨跌幅
+        if (totalAssets.compareTo(BigDecimal.ZERO) > 0) {
+            BigDecimal dailyChangeRate = totalDailyReturn.divide(
+                    totalAssets.subtract(totalDailyReturn), 4, RoundingMode.HALF_UP)
+                    .multiply(new BigDecimal("100"))
+                    .setScale(2, RoundingMode.HALF_UP);
+            overview.setDailyChangeRate(dailyChangeRate);
+        }
+        
+        // 累计收益
+        BigDecimal totalProfitLoss = totalAssets.subtract(totalCost);
+        overview.setTotalProfitLoss(totalProfitLoss);
+        
+        if (totalCost.compareTo(BigDecimal.ZERO) > 0) {
+            BigDecimal totalProfitRate = totalProfitLoss.divide(totalCost, 4, RoundingMode.HALF_UP)
+                    .multiply(new BigDecimal("100"))
+                    .setScale(2, RoundingMode.HALF_UP);
+            overview.setTotalProfitRate(totalProfitRate);
+        }
+        
+        // 构建持仓明细
+        List<PortfolioOverview.HoldingDetail> details = new java.util.ArrayList<>();
+        for (FundStockHolding holding : holdings) {
+            PortfolioOverview.HoldingDetail detail = new PortfolioOverview.HoldingDetail();
+            detail.setId(holding.getId());
+            detail.setFundCode(holding.getFundCode());
+            detail.setFundName(holding.getFundName());
+            detail.setHoldingAmount(holding.getHoldingAmount());
+            detail.setCostPrice(holding.getCostPrice());
+            detail.setCurrentPrice(holding.getCurrentPrice());
+            detail.setCurrentValue(holding.getCurrentValue());
+            detail.setTotalCost(holding.getTotalCost());
+            
+            // 获取昨日净值
+            try {
+                Map<String, Object> fundInfo = fundDataService.getFundQuote(holding.getFundCode());
+                if (fundInfo.containsKey("yesterdayNav")) {
+                    BigDecimal yesterdayNav = (BigDecimal) fundInfo.get("yesterdayNav");
+                    detail.setYesterdayNav(yesterdayNav);
+                    
+                    // 当日收益
+                    BigDecimal dailyRet = holding.getHoldingAmount()
+                            .multiply(holding.getCurrentPrice().subtract(yesterdayNav))
+                            .setScale(2, RoundingMode.HALF_UP);
+                    detail.setDailyReturn(dailyRet);
+                    
+                    // 当日涨跌幅
+                    if (yesterdayNav.compareTo(BigDecimal.ZERO) > 0) {
+                        BigDecimal dailyChg = holding.getCurrentPrice()
+                                .subtract(yesterdayNav)
+                                .divide(yesterdayNav, 4, RoundingMode.HALF_UP)
+                                .multiply(new BigDecimal("100"))
+                                .setScale(2, RoundingMode.HALF_UP);
+                        detail.setDailyChangeRate(dailyChg);
+                    }
+                }
+            } catch (Exception e) {
+                // ignore
+            }
+            
+            // 持有收益
+            detail.setProfitLoss(holding.getProfitLoss() != null ? holding.getProfitLoss() : BigDecimal.ZERO);
+            detail.setProfitRate(holding.getProfitRate() != null ? holding.getProfitRate() : BigDecimal.ZERO);
+            
+            // 持仓占比
+            if (totalAssets.compareTo(BigDecimal.ZERO) > 0) {
+                BigDecimal ratio = holding.getCurrentValue()
+                        .divide(totalAssets, 4, RoundingMode.HALF_UP)
+                        .multiply(new BigDecimal("100"))
+                        .setScale(2, RoundingMode.HALF_UP);
+                detail.setPositionRatio(ratio);
+            }
+            
+            details.add(detail);
+        }
+        
+        overview.setHoldings(details);
+        
+        return overview;
     }
     
     /**

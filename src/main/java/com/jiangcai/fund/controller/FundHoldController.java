@@ -1,5 +1,6 @@
 package com.jiangcai.fund.controller;
 
+import com.jiangcai.fund.dto.PortfolioOverview;
 import com.jiangcai.fund.entity.FundStockHolding;
 import com.jiangcai.fund.service.FundHoldService;
 import org.springframework.stereotype.Controller;
@@ -18,6 +19,24 @@ public class FundHoldController {
     
     public FundHoldController(FundHoldService fundHoldService) {
         this.fundHoldService = fundHoldService;
+    }
+    
+    /**
+     * 获取持仓概览（含当日收益）
+     */
+    @GetMapping("/overview")
+    @ResponseBody
+    public Map<String, Object> getPortfolioOverview() {
+        Map<String, Object> result = new HashMap<>();
+        try {
+            PortfolioOverview overview = fundHoldService.getPortfolioOverview();
+            result.put("success", true);
+            result.put("data", overview);
+        } catch (Exception e) {
+            result.put("success", false);
+            result.put("message", e.getMessage());
+        }
+        return result;
     }
     
     /**

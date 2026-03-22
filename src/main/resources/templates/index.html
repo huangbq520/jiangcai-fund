@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>基金估值查询系统</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -19,7 +20,7 @@
         }
         
         .container {
-            max-width: 800px;
+            max-width: 900px;
             margin: 0 auto;
         }
         
@@ -134,21 +135,52 @@
             color: #27ae60;
         }
         
-        .history-section {
+        /* 图表区域 */
+        .chart-section {
             margin-top: 30px;
         }
         
-        .history-title {
+        .chart-title {
             font-size: 1.2rem;
             font-weight: 600;
             color: #333;
             margin-bottom: 15px;
         }
         
+        .chart-tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        
+        .chart-tab {
+            padding: 8px 16px;
+            font-size: 14px;
+            background: #e9ecef;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .chart-tab:hover, .chart-tab.active {
+            background: #667eea;
+            color: white;
+        }
+        
+        .chart-container {
+            position: relative;
+            height: 300px;
+            width: 100%;
+        }
+        
         .history-list {
             display: flex;
             flex-direction: column;
             gap: 10px;
+            margin-top: 20px;
+            max-height: 300px;
+            overflow-y: auto;
         }
         
         .history-item {
@@ -296,46 +328,56 @@
                     更新时间：<span></span>
                 </div>
                 
-                <div class="history-section">
-                    <div class="history-title">📊 最近7天净值走势</div>
-                    <canvas id="navChart" width="700" height="200" style="width: 100%; max-width: 700px; height: 200px;"></canvas>
-                    <div class="history-list" id="historyList"></div>
+                <!-- 7天涨跌幅折线图 -->
+                <div class="chart-section">
+                    <div class="chart-title">📊 7日涨跌幅走势</div>
+                    <div class="chart-tabs">
+                        <button class="chart-tab active" onclick="switchChart('nav')">净值走势</button>
+                        <button class="chart-tab" onclick="switchChart('change')">涨跌幅</button>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="navChart"></canvas>
+                    </div>
                 </div>
+                
+                <!-- 历史净值列表 -->
+                <div class="history-title" style="margin-top: 20px; font-size: 1.2rem; font-weight: 600; color: #333; margin-bottom: 15px;">历史净值</div>
+                <div class="history-list" id="historyList"></div>
             </div>
         </div>
         
+        <!-- 导航 -->
         <div class="nav">
-            <a href="/">基金查询</a>
-            <a href="/hold">持仓管理</a>
+            <a href="/">🏠 首页 - 基金查询</a>
+            <a href="/hold">💼 持仓管理</a>
         </div>
     </div>
     
+    <div id="toast" class="toast"></div>
+    
     <script>
-        // Handle form submission
-        document.getElementById('queryForm').addEventListener('submit', function(e) {
+        let historyData = [];
+        let currentChartType = 'nav';
+        let navChart = null;
+        
+        // 表单提交
+        document.getElementById('queryForm').addEventListener('submit', async (e) => {
             e.preventDefault();
-            queryFund();
-        });
-        
-        function handleKeyPress(event) {
-            if (event.key === 'Enter') {
-                queryFund();
-            }
-        }
-        
-        async function queryFund() {
             const fundCode = document.getElementById('fundCode').value.trim();
             
-            if (!fundCode) {
-                showError('请输入基金代码');
+            if (!fundCode || !/^\d{6}$/.test(fundCode)) {
+                showToast('请输入6位基金代码', 'error');
                 return;
             }
             
-            hideError();
+            await queryFund(fundCode);
+        });
+        
+        async function queryFund(fundCode) {
             showLoading();
             
             try {
-                // 查询实时估值
+                // 获取实时估值
                 const quoteRes = await fetch('/api/fund/quote?fundCode=' + fundCode);
                 const quoteData = await quoteRes.json();
                 
@@ -346,11 +388,12 @@
                 
                 displayQuote(quoteData);
                 
-                // 查询历史净值
+                // 获取历史数据
                 const historyRes = await fetch('/api/fund/history?fundCode=' + fundCode + '&days=7');
-                const historyData = await historyRes.json();
+                const history = await historyRes.json();
                 
-                displayHistory(historyData);
+                historyData = history;
+                displayHistory(history);
                 
                 showResult();
             } catch (e) {
@@ -365,7 +408,6 @@
             document.getElementById('dwjz').textContent = data.dwjz || '-';
             document.getElementById('code').textContent = data.fundCode;
             
-            // 显示更新时间
             const updateTimeEl = document.getElementById('updateTime');
             if (data.updateTime) {
                 updateTimeEl.querySelector('span').textContent = data.updateTime;
@@ -397,103 +439,115 @@
             }
         }
         
-        // 绘制折线图
-        function drawChart(data) {
-            const canvas = document.getElementById('navChart');
-            const ctx = canvas.getContext('2d');
+        // 切换图表类型
+        function switchChart(type) {
+            currentChartType = type;
             
-            // 设置canvas尺寸为实际显示尺寸
-            const rect = canvas.getBoundingClientRect();
-            canvas.width = rect.width * 2;
-            canvas.height = rect.height * 2;
-            ctx.scale(2, 2);
+            // 更新按钮状态
+            document.querySelectorAll('.chart-tab').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
             
-            const width = rect.width;
-            const height = rect.height;
-            const padding = 40;
+            // 重新绘制图表
+            drawChart();
+        }
+        
+        // 绘制图表
+        function drawChart() {
+            const ctx = document.getElementById('navChart').getContext('2d');
             
-            // 清空画布
-            ctx.clearRect(0, 0, width, height);
-            
-            if (!data || data.length === 0) return;
-            
-            // 获取数据范围
-            const values = data.map(d => d.dwjz);
-            const minVal = Math.min(...values);
-            const maxVal = Math.max(...values);
-            const range = maxVal - minVal || 1;
-            
-            // 绘制网格线
-            ctx.strokeStyle = '#e0e0e0';
-            ctx.lineWidth = 1;
-            ctx.setLineDash([5, 5]);
-            
-            // 绘制Y轴网格
-            for (let i = 0; i <= 4; i++) {
-                const y = padding + (height - 2 * padding) * i / 4;
-                ctx.beginPath();
-                ctx.moveTo(padding, y);
-                ctx.lineTo(width - padding, y);
-                ctx.stroke();
-                
-                // Y轴标签
-                const val = maxVal - range * i / 4;
-                ctx.fillStyle = '#999';
-                ctx.font = '10px Arial';
-                ctx.textAlign = 'right';
-                ctx.fillText(val.toFixed(4), padding - 5, y + 4);
+            // 销毁旧图表
+            if (navChart) {
+                navChart.destroy();
             }
             
-            ctx.setLineDash([]);
+            if (!historyData || historyData.length === 0) return;
             
-            // 绘制折线
-            const points = data.map((d, i) => ({
-                x: padding + (width - 2 * padding) * i / (data.length - 1),
-                y: padding + (height - 2 * padding) * (1 - (d.dwjz - minVal) / range)
-            }));
+            // 反转数据顺序（让日期从左到右递增）
+            const chartData = [...historyData].reverse();
             
-            // 渐变填充
-            const gradient = ctx.createLinearGradient(0, padding, 0, height - padding);
-            gradient.addColorStop(0, 'rgba(102, 126, 234, 0.3)');
-            gradient.addColorStop(1, 'rgba(102, 126, 234, 0.05)');
+            const labels = chartData.map(d => d.date);
             
-            ctx.beginPath();
-            ctx.moveTo(points[0].x, height - padding);
-            points.forEach(p => ctx.lineTo(p.x, p.y));
-            ctx.lineTo(points[points.length - 1].x, height - padding);
-            ctx.closePath();
-            ctx.fillStyle = gradient;
-            ctx.fill();
+            let datasets;
+            let yAxisLabel;
             
-            // 绘制线条
-            ctx.beginPath();
-            ctx.strokeStyle = '#667eea';
-            ctx.lineWidth = 2;
-            points.forEach((p, i) => {
-                if (i === 0) ctx.moveTo(p.x, p.y);
-                else ctx.lineTo(p.x, p.y);
-            });
-            ctx.stroke();
+            if (currentChartType === 'nav') {
+                // 净值走势
+                datasets = [{
+                    label: '单位净值',
+                    data: chartData.map(d => d.dwjz),
+                    borderColor: '#667eea',
+                    backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                    fill: true,
+                    tension: 0.4,
+                    pointRadius: 4,
+                    pointBackgroundColor: '#667eea'
+                }];
+                yAxisLabel = '净值';
+            } else {
+                // 涨跌幅
+                datasets = [{
+                    label: '涨跌幅 (%)',
+                    data: chartData.map(d => d.changeRate || 0),
+                    borderColor: '#f5576c',
+                    backgroundColor: chartData.map(d => (d.changeRate || 0) >= 0 ? 'rgba(231, 76, 60, 0.1)' : 'rgba(39, 174, 96, 0.1)'),
+                    fill: true,
+                    tension: 0.4,
+                    pointRadius: 4,
+                    pointBackgroundColor: chartData.map(d => (d.changeRate || 0) >= 0 ? '#e74c3c' : '#27ae60')
+                }];
+                yAxisLabel = '涨跌幅 (%)';
+            }
             
-            // 绘制点和标签
-            points.forEach((p, i) => {
-                const d = data[i];
-                
-                // 点
-                ctx.beginPath();
-                ctx.arc(p.x, p.y, 4, 0, 2 * Math.PI);
-                ctx.fillStyle = '#667eea';
-                ctx.fill();
-                ctx.strokeStyle = 'white';
-                ctx.lineWidth = 2;
-                ctx.stroke();
-                
-                // X轴标签
-                ctx.fillStyle = '#666';
-                ctx.font = '10px Arial';
-                ctx.textAlign = 'center';
-                const dateLabel = d.date.substring(5); // 只显示月-日
-                ctx.fillText(dateLabel, p.x, height - padding + 20);
+            navChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: datasets
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        intersect: false,
+                        mode: 'index'
+                    },
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top'
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    if (currentChartType === 'nav') {
+                                        return '净值: ' + context.parsed.y.toFixed(4);
+                                    } else {
+                                        const value = context.parsed.y;
+                                        return '涨跌幅: ' + (value >= 0 ? '+' : '') + value.toFixed(2) + '%';
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: {
+                                display: false
+                            }
+                        },
+                        y: {
+                            grid: {
+                                color: '#e0e0e0'
+                            },
+                            title: {
+                                display: true,
+                                text: yAxisLabel
+                            }
+                        }
+                    }
+                }
             });
         }
         
@@ -506,15 +560,20 @@
                 return;
             }
             
-            // 绘制折线图
-            drawChart(data);
+            // 绘制图表
+            drawChart();
             
+            // 显示历史列表
             data.forEach(item => {
                 const div = document.createElement('div');
                 div.className = 'history-item';
+                const changeRate = item.changeRate || 0;
                 div.innerHTML = `
                     <span class="history-date">${item.date}</span>
-                    <span class="history-value">${item.dwjz.toFixed(4)}</span>
+                    <span class="history-value ${changeRate >= 0 ? 'positive' : 'negative'}">
+                        ${item.dwjz.toFixed(4)} 
+                        (${changeRate >= 0 ? '+' : ''}${changeRate.toFixed(2)}%)
+                    </span>
                 `;
                 container.appendChild(div);
             });
@@ -529,10 +588,8 @@
             toast.textContent = message;
             document.body.appendChild(toast);
             
-            // 显示动画
             setTimeout(() => toast.classList.add('show'), 10);
             
-            // 3秒后隐藏
             setTimeout(() => {
                 toast.classList.remove('show');
                 setTimeout(() => toast.remove(), 300);
@@ -553,10 +610,6 @@
             document.getElementById('error').textContent = msg;
             document.getElementById('error').style.display = 'block';
             document.getElementById('result').classList.remove('show');
-        }
-        
-        function hideError() {
-            document.getElementById('error').style.display = 'none';
         }
         
         function showResult() {

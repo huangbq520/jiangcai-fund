@@ -19,7 +19,7 @@
         }
         
         .container {
-            max-width: 1000px;
+            max-width: 1200px;
             margin: 0 auto;
         }
         
@@ -57,6 +57,45 @@
             border-bottom: 1px solid #eee;
         }
         
+        /* 持仓概览卡片 */
+        .overview-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 20px;
+        }
+        
+        .overview-card {
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 12px;
+            color: white;
+            text-align: center;
+        }
+        
+        .overview-card:nth-child(2) {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        }
+        
+        .overview-card:nth-child(3) {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+        }
+        
+        .overview-card:nth-child(4) {
+            background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+        }
+        
+        .overview-label {
+            font-size: 0.9rem;
+            opacity: 0.9;
+            margin-bottom: 8px;
+        }
+        
+        .overview-value {
+            font-size: 1.8rem;
+            font-weight: 700;
+        }
+        
+        /* 表单区域 */
         .form-grid {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
@@ -110,10 +149,6 @@
             box-shadow: 0 5px 15px rgba(17, 153, 142, 0.3);
         }
         
-        .btn-primary:hover {
-            box-shadow: 0 8px 20px rgba(17, 153, 142, 0.4);
-        }
-        
         .btn-secondary {
             background: #6c757d;
             box-shadow: 0 5px 15px rgba(108, 117, 125, 0.3);
@@ -129,49 +164,21 @@
             font-size: 12px;
         }
         
-        .summary-grid {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 15px;
-            margin-bottom: 20px;
-        }
-        
-        .summary-item {
-            padding: 15px;
-            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-            border-radius: 10px;
-            text-align: center;
-        }
-        
-        .summary-label {
-            font-size: 0.85rem;
-            color: #666;
-            margin-bottom: 5px;
-        }
-        
-        .summary-value {
-            font-size: 1.5rem;
-            font-weight: 700;
-            color: #333;
-        }
-        
-        .summary-value.positive {
-            color: #e74c3c;
-        }
-        
-        .summary-value.negative {
-            color: #27ae60;
+        /* 持仓明细表格 */
+        .table-container {
+            overflow-x: auto;
         }
         
         .holdings-table {
             width: 100%;
             border-collapse: collapse;
+            min-width: 900px;
         }
         
         .holdings-table th,
         .holdings-table td {
-            padding: 12px;
-            text-align: left;
+            padding: 12px 8px;
+            text-align: center;
             border-bottom: 1px solid #eee;
         }
         
@@ -179,11 +186,12 @@
             background: #f8f9fa;
             font-weight: 600;
             color: #333;
-            font-size: 0.9rem;
+            font-size: 0.85rem;
+            white-space: nowrap;
         }
         
         .holdings-table td {
-            font-size: 0.9rem;
+            font-size: 0.85rem;
             color: #555;
         }
         
@@ -191,6 +199,30 @@
             background: #f8f9fa;
         }
         
+        /* 排序按钮 */
+        .sort-btns {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+        
+        .sort-btn {
+            padding: 6px 12px;
+            font-size: 12px;
+            background: #e9ecef;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .sort-btn:hover, .sort-btn.active {
+            background: #11998e;
+            color: white;
+        }
+        
+        /* 涨跌颜色 */
         .profit-positive {
             color: #e74c3c;
             font-weight: 600;
@@ -201,9 +233,28 @@
             font-weight: 600;
         }
         
+        /* 持仓占比进度条 */
+        .progress-bar {
+            width: 60px;
+            height: 8px;
+            background: #e9ecef;
+            border-radius: 4px;
+            overflow: hidden;
+            display: inline-block;
+            vertical-align: middle;
+            margin-right: 5px;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #11998e, #38ef7d);
+            border-radius: 4px;
+        }
+        
         .action-btns {
             display: flex;
             gap: 5px;
+            justify-content: center;
         }
         
         .empty-state {
@@ -234,50 +285,11 @@
             background: rgba(255,255,255,0.3);
         }
         
-        .message {
-            padding: 15px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            display: none;
-        }
-        
-        .message.success {
-            background: #d4edda;
-            color: #155724;
-            display: block;
-        }
-        
-        .message.error {
-            background: #f8d7da;
-            color: #721c24;
-            display: block;
-        }
-        
         .refresh-btn {
             display: flex;
-            justify-content: flex-end;
+            justify-content: space-between;
+            align-items: center;
             margin-bottom: 15px;
-        }
-        
-        .sort-btns {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 15px;
-        }
-        
-        .sort-btn {
-            padding: 6px 12px;
-            font-size: 12px;
-            background: #e9ecef;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            transition: background 0.3s;
-        }
-        
-        .sort-btn:hover, .sort-btn.active {
-            background: #11998e;
-            color: white;
         }
         
         .toast {
@@ -308,294 +320,285 @@
             background: #e74c3c;
         }
         
-        .tooltip {
-            position: absolute;
-            background: #333;
-            color: white;
-            padding: 10px;
-            border-radius: 6px;
-            font-size: 12px;
-            z-index: 100;
-            display: none;
-        }
-        
-        .tooltip.show {
-            display: block;
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #999;
         }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h1>💼 持仓管理</h1>
-            <p>管理您的基金持仓，查看收益情况</p>
+            <h1>📊 基金持仓管理</h1>
+            <p>实时估值 · 智能持仓 · 收益分析</p>
         </div>
         
+        <!-- 持仓概览 -->
         <div class="card">
-            <div class="card-title">➕ 买入/卖出</div>
+            <div class="card-title">💰 持仓概览</div>
+            <div class="overview-grid">
+                <div class="overview-card">
+                    <div class="overview-label">账户总资产</div>
+                    <div class="overview-value" id="totalAssets">-</div>
+                </div>
+                <div class="overview-card">
+                    <div class="overview-label">持有基金数</div>
+                    <div class="overview-value" id="fundCount">-</div>
+                </div>
+                <div class="overview-card">
+                    <div class="overview-label">当日收益</div>
+                    <div class="overview-value" id="dailyReturn">-</div>
+                </div>
+                <div class="overview-card">
+                    <div class="overview-label">累计收益</div>
+                    <div class="overview-value" id="totalProfit">-</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 买入/卖出表单 -->
+        <div class="card">
+            <div class="card-title">📈 买入/卖出</div>
             <div class="form-grid">
                 <div class="form-group">
-                    <label>基金代码</label>
-                    <input type="text" id="fundCode" placeholder="如：161039">
+                    <label>基金代码（6位数字）</label>
+                    <input type="text" id="fundCode" placeholder="例如: 161039" maxlength="6">
                 </div>
                 <div class="form-group">
-                    <label>份额/金额</label>
-                    <input type="number" id="amount" placeholder="请输入份额" step="0.01">
+                    <label>买入/卖出份额</label>
+                    <input type="number" id="amount" placeholder="请输入份额" step="0.01" min="0.01">
                 </div>
                 <div class="form-group">
-                    <label>价格（可选）</label>
-                    <input type="number" id="price" placeholder="默认查询实时净值" step="0.0001">
+                    <label>价格（可选，默认实时估值）</label>
+                    <input type="number" id="price" placeholder="例如: 1.5234" step="0.0001">
                 </div>
             </div>
             <div class="btn-group">
                 <button class="btn btn-primary" onclick="addHolding()">买入</button>
                 <button class="btn btn-danger" onclick="sellHolding()">卖出</button>
+                <button class="btn btn-secondary" onclick="clearForm()">清空</button>
             </div>
         </div>
         
-        <div class="card">
-            <div class="card-title">📊 持仓概览</div>
-            <div class="summary-grid">
-                <div class="summary-item">
-                    <div class="summary-label">持有基金数</div>
-                    <div class="summary-value" id="totalFunds">0</div>
-                </div>
-                <div class="summary-item">
-                    <div class="summary-label">总市值</div>
-                    <div class="summary-value" id="totalValue">0.00</div>
-                </div>
-                <div class="summary-item">
-                    <div class="summary-label">总成本</div>
-                    <div class="summary-value" id="totalCost">0.00</div>
-                </div>
-                <div class="summary-item">
-                    <div class="summary-label">总盈亏</div>
-                    <div class="summary-value" id="totalProfit">0.00</div>
-                </div>
-            </div>
-        </div>
-        
+        <!-- 持仓明细 -->
         <div class="card">
             <div class="card-title">📋 持仓明细</div>
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+            <div class="refresh-btn">
                 <div class="sort-btns">
-                    <button class="sort-btn active" onclick="sortHoldings('default')">默认</button>
-                    <button class="sort-btn" onclick="sortHoldings('profitRate')">按盈亏比例</button>
-                    <button class="sort-btn" onclick="sortHoldings('currentValue')">按持仓金额</button>
+                    <button class="sort-btn active" onclick="sortBy('positionRatio')">按持仓占比</button>
+                    <button class="sort-btn" onclick="sortBy('dailyReturn')">按当日收益</button>
+                    <button class="sort-btn" onclick="sortBy('profitLoss')">按持有收益</button>
+                    <button class="sort-btn" onclick="sortBy('fundCode')">按基金代码</button>
                 </div>
-                <button class="btn btn-secondary btn-sm" onclick="refreshHoldings()">🔄 刷新最新净值</button>
+                <button class="btn btn-primary btn-sm" onclick="loadPortfolioOverview()">🔄 刷新最新净值</button>
             </div>
-            <div id="message"></div>
-            <table class="holdings-table">
-                <thead>
-                    <tr>
-                        <th>基金代码</th>
-                        <th>基金名称</th>
-                        <th>持有份额</th>
-                        <th>成本价</th>
-                        <th>当前净值</th>
-                        <th>总成本</th>
-                        <th>当前市值</th>
-                        <th>盈亏金额</th>
-                        <th>盈亏比例</th>
-                        <th>操作</th>
-                    </tr>
-                </thead>
-                <tbody id="holdingsTable">
-                </tbody>
-            </table>
-            <div id="emptyState" class="empty-state">
-                暂无持仓，请先买入基金
+            
+            <div class="table-container">
+                <table class="holdings-table">
+                    <thead>
+                        <tr>
+                            <th>基金代码</th>
+                            <th>基金名称</th>
+                            <th>持有份额</th>
+                            <th>成本价</th>
+                            <th>当前净值</th>
+                            <th>当日收益</th>
+                            <th>当日涨跌</th>
+                            <th>持有收益</th>
+                            <th>持仓占比</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="holdingsTable">
+                        <tr>
+                            <td colspan="10" class="loading">加载中...</td>
+                        </tr>
+                    </tbody>
+                </table>
             </div>
         </div>
         
+        <!-- 导航 -->
         <div class="nav">
-            <a href="/">基金查询</a>
-            <a href="/hold">持仓管理</a>
+            <a href="/">🏠 首页 - 基金查询</a>
+            <a href="/hold">💼 持仓管理</a>
         </div>
     </div>
     
+    <div id="toast" class="toast"></div>
+    
     <script>
-        let currentHoldings = [];
-        let currentSort = 'default';
+        let portfolioData = null;
+        let currentSort = { field: 'positionRatio', desc: true };
         
-        // 页面加载时获取持仓列表
+        // 页面加载时获取数据
         document.addEventListener('DOMContentLoaded', function() {
-            loadHoldings();
+            loadPortfolioOverview();
         });
         
-        async function loadHoldings() {
+        // 加载持仓概览数据
+        async function loadPortfolioOverview() {
             try {
-                const res = await fetch('/api/hold/list');
+                const res = await fetch('/api/hold/overview');
                 const data = await res.json();
                 
                 if (data.success) {
-                    currentHoldings = data.data;
-                    displayHoldings(currentHoldings);
+                    portfolioData = data.data;
+                    updateOverviewCards(data.data);
+                    updateHoldingsTable(data.data.holdings || []);
                 } else {
                     showToast(data.message || '加载失败', 'error');
                 }
             } catch (e) {
+                console.error('加载持仓概览失败', e);
                 showToast('加载失败: ' + e.message, 'error');
             }
         }
         
-        function sortHoldings(sortType) {
-            currentSort = sortType;
+        // 更新概览卡片
+        function updateOverviewCards(data) {
+            document.getElementById('totalAssets').textContent = formatCurrency(data.totalAssets);
+            document.getElementById('fundCount').textContent = data.fundCount || 0;
+            
+            const dailyReturnEl = document.getElementById('dailyReturn');
+            const dailyReturn = parseFloat(data.dailyReturn) || 0;
+            dailyReturnEl.textContent = formatCurrency(dailyReturn);
+            dailyReturnEl.className = 'overview-value ' + (dailyReturn >= 0 ? 'profit-positive' : 'profit-negative');
+            
+            const totalProfitEl = document.getElementById('totalProfit');
+            const totalProfit = parseFloat(data.totalProfitLoss) || 0;
+            totalProfitEl.textContent = formatCurrency(totalProfit);
+            totalProfitEl.className = 'overview-value ' + (totalProfit >= 0 ? 'profit-positive' : 'profit-negative');
+        }
+        
+        // 更新持仓明细表格
+        function updateHoldingsTable(holdings) {
+            const tbody = document.getElementById('holdingsTable');
+            
+            if (!holdings || holdings.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="10" class="empty-state">暂无持仓，请先买入基金</td></tr>';
+                return;
+            }
+            
+            // 排序
+            const sorted = [...holdings].sort((a, b) => {
+                let aVal = a[currentSort.field] || 0;
+                let bVal = b[currentSort.field] || 0;
+                if (currentSort.desc) {
+                    return bVal - aVal;
+                }
+                return aVal - bVal;
+            });
+            
+            tbody.innerHTML = sorted.map(h => {
+                const dailyReturn = parseFloat(h.dailyReturn) || 0;
+                const dailyChangeRate = parseFloat(h.dailyChangeRate) || 0;
+                const profitLoss = parseFloat(h.profitLoss) || 0;
+                const profitRate = parseFloat(h.profitRate) || 0;
+                const positionRatio = parseFloat(h.positionRatio) || 0;
+                
+                return `
+                    <tr>
+                        <td><strong>${h.fundCode || '-'}</strong></td>
+                        <td>${h.fundName || '-'}</td>
+                        <td>${formatNumber(h.holdingAmount)}</td>
+                        <td>${formatNumber(h.costPrice)}</td>
+                        <td>${formatNumber(h.currentPrice)}</td>
+                        <td class="${dailyReturn >= 0 ? 'profit-positive' : 'profit-negative'}">
+                            ${formatCurrency(dailyReturn)}
+                        </td>
+                        <td class="${dailyChangeRate >= 0 ? 'profit-positive' : 'profit-negative'}">
+                            ${dailyChangeRate >= 0 ? '+' : ''}${dailyChangeRate.toFixed(2)}%
+                        </td>
+                        <td class="${profitLoss >= 0 ? 'profit-positive' : 'profit-negative'}">
+                            ${formatCurrency(profitLoss)}<br>
+                            <small>(${profitRate >= 0 ? '+' : ''}${profitRate.toFixed(2)}%)</small>
+                        </td>
+                        <td>
+                            <div class="progress-bar">
+                                <div class="progress-fill" style="width: ${positionRatio}%"></div>
+                            </div>
+                            ${positionRatio.toFixed(1)}%
+                        </td>
+                        <td class="action-btns">
+                            <button class="btn btn-danger btn-sm" onclick="deleteHolding('${h.fundCode}')">删除</button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+        
+        // 排序
+        function sortBy(field) {
+            // 切换排序方向
+            if (currentSort.field === field) {
+                currentSort.desc = !currentSort.desc;
+            } else {
+                currentSort.field = field;
+                currentSort.desc = true;
+            }
             
             // 更新按钮状态
             document.querySelectorAll('.sort-btn').forEach(btn => {
                 btn.classList.remove('active');
-            });
-            event.target.classList.add('active');
-            
-            let sorted = [...currentHoldings];
-            
-            switch(sortType) {
-                case 'profitRate':
-                    sorted.sort((a, b) => (b.profitRate || 0) - (a.profitRate || 0));
-                    break;
-                case 'currentValue':
-                    sorted.sort((a, b) => (b.currentValue || 0) - (a.currentValue || 0));
-                    break;
-                default:
-                    // 保持原顺序
-                    break;
-            }
-            
-            displayHoldings(sorted);
-        }
-        
-        function displayHoldings(holdings) {
-            const tbody = document.getElementById('holdingsTable');
-            const emptyState = document.getElementById('emptyState');
-            
-            tbody.innerHTML = '';
-            
-            if (!holdings || holdings.length === 0) {
-                emptyState.style.display = 'block';
-                updateSummary(0, 0, 0, 0);
-                return;
-            }
-            
-            emptyState.style.display = 'none';
-            
-            let totalValue = 0;
-            let totalCost = 0;
-            
-            holdings.forEach(h => {
-                totalValue += parseFloat(h.currentValue || 0);
-                totalCost += parseFloat(h.totalCost || 0);
-                
-                const tr = document.createElement('tr');
-                tr.innerHTML = `
-                    <td>${h.fundCode}</td>
-                    <td>${h.fundName || '-'}</td>
-                    <td>${formatNumber(h.holdingAmount)}</td>
-                    <td>${formatNumber(h.costPrice)}</td>
-                    <td>${formatNumber(h.currentPrice)}</td>
-                    <td>${formatNumber(h.totalCost)}</td>
-                    <td>${formatNumber(h.currentValue)}</td>
-                    <td class="${h.profitLoss >= 0 ? 'profit-positive' : 'profit-negative'}">
-                        ${formatProfit(h.profitLoss)}
-                    </td>
-                    <td class="${h.profitLoss >= 0 ? 'profit-positive' : 'profit-negative'}">
-                        ${formatProfitRate(h.profitRate)}
-                    </td>
-                    <td class="action-btns">
-                        <button class="btn btn-danger btn-sm" onclick="deleteHolding('${h.fundCode}')">删除</button>
-                    </td>
-                `;
-                tbody.appendChild(tr);
+                if (btn.textContent.includes(getSortLabel(field))) {
+                    btn.classList.add('active');
+                }
             });
             
-            const totalProfit = totalValue - totalCost;
-            updateSummary(holdings.length, totalValue, totalCost, totalProfit);
+            // 重新渲染表格
+            if (portfolioData && portfolioData.holdings) {
+                updateHoldingsTable(portfolioData.holdings);
+            }
         }
         
-        function updateSummary(count, value, cost, profit) {
-            document.getElementById('totalFunds').textContent = count;
-            document.getElementById('totalValue').textContent = formatNumber(value);
-            document.getElementById('totalCost').textContent = formatNumber(cost);
-            
-            const profitEl = document.getElementById('totalProfit');
-            profitEl.textContent = formatProfit(profit);
-            profitEl.className = 'summary-value ' + (profit >= 0 ? 'positive' : 'negative');
+        function getSortLabel(field) {
+            const labels = {
+                'positionRatio': '持仓占比',
+                'dailyReturn': '当日收益',
+                'profitLoss': '持有收益',
+                'fundCode': '基金代码'
+            };
+            return labels[field] || field;
         }
         
+        // 格式化货币
+        function formatCurrency(num) {
+            if (num === null || num === undefined) return '¥0.00';
+            const value = parseFloat(num);
+            const sign = value >= 0 ? '+' : '';
+            return sign + '¥' + Math.abs(value).toFixed(2);
+        }
+        
+        // 格式化数字
         function formatNumber(num) {
             if (num === null || num === undefined) return '-';
-            return parseFloat(num).toFixed(2);
+            return parseFloat(num).toFixed(4);
         }
         
-        function formatProfit(num) {
-            if (num === null || num === undefined) return '-';
-            const value = parseFloat(num);
-            const sign = value >= 0 ? '+' : '';
-            return sign + value.toFixed(2);
-        }
-        
-        function formatProfitRate(num) {
-            if (num === null || num === undefined) return '-';
-            const value = parseFloat(num);
-            const sign = value >= 0 ? '+' : '';
-            return sign + value.toFixed(2) + '%';
-        }
-        
-        // 验证基金代码（6位数字）
+        // 验证基金代码
         function validateFundCode(code) {
             return /^\d{6}$/.test(code);
         }
         
-        // 显示Toast提示
+        // 显示Toast
         function showToast(message, type) {
-            const existingToast = document.querySelector('.toast');
-            if (existingToast) existingToast.remove();
-            
-            const toast = document.createElement('div');
-            toast.className = `toast ${type}`;
+            const toast = document.getElementById('toast');
             toast.textContent = message;
-            document.body.appendChild(toast);
-            
-            setTimeout(() => toast.classList.add('show'), 10);
+            toast.className = `toast ${type} show`;
             
             setTimeout(() => {
                 toast.classList.remove('show');
-                setTimeout(() => toast.remove(), 300);
             }, 3000);
         }
         
-        // 自动填充持有份额（卖出时）
-        async function onFundCodeChange() {
-            const fundCode = document.getElementById('fundCode').value.trim();
-            if (fundCode && validateFundCode(fundCode)) {
-                try {
-                    const res = await fetch('/api/hold/list');
-                    const data = await res.json();
-                    
-                    if (data.success && data.data) {
-                        const holding = data.data.find(h => h.fundCode === fundCode);
-                        if (holding) {
-                            // 显示当前持有份额的提示
-                            document.getElementById('amount').placeholder = `当前持有: ${holding.holdingAmount} 份`;
-                        } else {
-                            document.getElementById('amount').placeholder = '请输入份额';
-                        }
-                    }
-                } catch (e) {
-                    console.error('获取持仓信息失败', e);
-                }
-            }
-        }
-        
-        document.getElementById('fundCode').addEventListener('blur', onFundCodeChange);
-        
+        // 买入
         async function addHolding() {
             const fundCode = document.getElementById('fundCode').value.trim();
             const amount = document.getElementById('amount').value;
             const price = document.getElementById('price').value;
             
-            // 验证基金代码
             if (!fundCode) {
                 showToast('请输入基金代码', 'error');
                 return;
@@ -606,28 +609,23 @@
                 return;
             }
             
-            // 验证份额
             if (!amount || parseFloat(amount) <= 0) {
-                showToast('请输入有效的买入份额（必须大于0）', 'error');
+                showToast('请输入有效的买入份额', 'error');
                 return;
             }
             
             const params = new URLSearchParams();
             params.append('fundCode', fundCode);
             params.append('amount', amount);
-            if (price) {
-                params.append('price', price);
-            }
+            if (price) params.append('price', price);
             
             try {
-                const res = await fetch('/api/hold/add?' + params.toString(), {
-                    method: 'POST'
-                });
+                const res = await fetch('/api/hold/add?' + params.toString(), { method: 'POST' });
                 const data = await res.json();
                 
                 if (data.success) {
-                    showToast(data.message || '买入成功', 'success');
-                    loadHoldings();
+                    showToast('买入成功', 'success');
+                    loadPortfolioOverview();
                     clearForm();
                 } else {
                     showToast(data.message || '买入失败', 'error');
@@ -637,44 +635,19 @@
             }
         }
         
+        // 卖出
         async function sellHolding() {
             const fundCode = document.getElementById('fundCode').value.trim();
             const amount = document.getElementById('amount').value;
             
-            // 验证基金代码
-            if (!fundCode) {
-                showToast('请输入基金代码', 'error');
+            if (!fundCode || !validateFundCode(fundCode)) {
+                showToast('请输入有效的基金代码', 'error');
                 return;
             }
             
-            if (!validateFundCode(fundCode)) {
-                showToast('基金代码必须是6位数字', 'error');
-                return;
-            }
-            
-            // 验证份额
             if (!amount || parseFloat(amount) <= 0) {
-                showToast('请输入有效的卖出份额（必须大于0）', 'error');
+                showToast('请输入有效的卖出份额', 'error');
                 return;
-            }
-            
-            // 获取当前持仓检查可卖数量
-            try {
-                const res = await fetch('/api/hold/list');
-                const data = await res.json();
-                
-                if (data.success && data.data) {
-                    const holding = data.data.find(h => h.fundCode === fundCode);
-                    if (holding) {
-                        const sellAmount = parseFloat(amount);
-                        if (sellAmount > parseFloat(holding.holdingAmount)) {
-                            showToast('卖出份额不能超过持有份额 ' + holding.holdingAmount, 'error');
-                            return;
-                        }
-                    }
-                }
-            } catch (e) {
-                console.error('检查持仓失败', e);
             }
             
             try {
@@ -684,8 +657,8 @@
                 const data = await res.json();
                 
                 if (data.success) {
-                    showToast(data.message || '卖出成功', 'success');
-                    loadHoldings();
+                    showToast('卖出成功', 'success');
+                    loadPortfolioOverview();
                     clearForm();
                 } else {
                     showToast(data.message || '卖出失败', 'error');
@@ -695,56 +668,23 @@
             }
         }
         
+        // 删除持仓
         async function deleteHolding(fundCode) {
-            if (!confirm('确定要删除该持仓吗？')) {
-                return;
-            }
+            if (!confirm('确定要删除该持仓吗？')) return;
             
             try {
-                const res = await fetch('/api/hold/delete?fundCode=' + fundCode, {
-                    method: 'POST'
-                });
+                const res = await fetch('/api/hold/delete?fundCode=' + fundCode, { method: 'POST' });
                 const data = await res.json();
                 
                 if (data.success) {
-                    showMessage(data.message || '删除成功', 'success');
-                    loadHoldings();
+                    showToast('删除成功', 'success');
+                    loadPortfolioOverview();
                 } else {
-                    showMessage(data.message || '删除失败', 'error');
+                    showToast(data.message || '删除失败', 'error');
                 }
             } catch (e) {
-                showMessage('删除失败: ' + e.message, 'error');
+                showToast('删除失败: ' + e.message, 'error');
             }
-        }
-        
-        async function refreshHoldings() {
-            showMessage('正在刷新...', 'success');
-            
-            try {
-                const res = await fetch('/api/hold/refresh', {
-                    method: 'POST'
-                });
-                const data = await res.json();
-                
-                if (data.success) {
-                    showMessage('刷新成功', 'success');
-                    loadHoldings();
-                } else {
-                    showMessage(data.message || '刷新失败', 'error');
-                }
-            } catch (e) {
-                showMessage('刷新失败: ' + e.message, 'error');
-            }
-        }
-        
-        function showMessage(msg, type) {
-            const el = document.getElementById('message');
-            el.textContent = msg;
-            el.className = 'message ' + type;
-            
-            setTimeout(() => {
-                el.className = 'message';
-            }, 3000);
         }
         
         function clearForm() {
