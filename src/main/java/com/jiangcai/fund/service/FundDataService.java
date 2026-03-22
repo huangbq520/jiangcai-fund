@@ -133,6 +133,8 @@ public class FundDataService {
     
     /**
      * 获取基金历史净值（带涨跌幅）
+     * @param fundCode 基金代码
+     * @param days 请求天数（30/90/180/250）
      */
     public List<Map<String, Object>> getFundHistory(String fundCode, int days) {
         List<Map<String, Object>> result = new ArrayList<>();
@@ -159,60 +161,52 @@ public class FundDataService {
                         JsonNode array = objectMapper.readTree(trendData);
                         
                         if (array.isArray() && array.size() >= 2) {
-                            // 收集所有数据
+                            // 收集所有数据（从旧到新）
                             List<Map<String, Object>> allData = new ArrayList<>();
                             
-                            for (int i = array.size() - 1; i >= 0; i--) {
+                            // 从数组末尾取最新数据
+                            int startIdx = Math.max(0, array.size() - days);
+                            for (int i = startIdx; i < array.size(); i++) {
                                 JsonNode item = array.get(i);
                                 Map<String, Object> dayData = new HashMap<>();
                                 
                                 if (item.has("x") && item.has("y")) {
                                     long timestamp = item.get("x").asLong();
-                                    SimpleDateFormat sdf = new SimpleDateFormat("MM-dd");
-                                    String date = sdf.format(new Date(timestamp));
-                                    dayData.put("date", date);
+                                    SimpleDateFormat sdfFull = new SimpleDateFormat("yyyy-MM-dd");
+                                    SimpleDateFormat sdfShort = new SimpleDateFormat("MM-dd");
+                                    String dateFull = sdfFull.format(new Date(timestamp));
+                                    String dateShort = sdfShort.format(new Date(timestamp));
+                                    
+                                    dayData.put("date", dateShort);
+                                    dayData.put("dateFull", dateFull);
                                     dayData.put("dwjz", item.get("y").asDouble());
+                                    
+                                    // 获取当日涨跌幅
+                                    if (item.has("changeRate")) {
+                                        dayData.put("changeRate", item.get("changeRate").asDouble());
+                                    } else if (item.has("equityReturn") && !item.get("equityReturn").isNull()) {
+                                        dayData.put("changeRate", item.get("equityReturn").asDouble());
+                                    }
+                                    
                                     allData.add(dayData);
                                 }
                             }
                             
-                            // 计算涨跌幅（从后往前，最近的为基准点）
-                            // 累计涨跌幅：以最后一天为基准
-                            double baseNav = 0;
-                            if (!allData.isEmpty()) {
-                                baseNav = (double) allData.get(0).get("dwjz");
+                            // 计算累计涨跌幅（以最早一天为基准）
+                            if (allData.size() >= 2) {
+                                double baseNav = (double) allData.get(0).get("dwjz");
+                                
+                                for (Map<String, Object> dayData : allData) {
+                                    double nav = (double) dayData.get("dwjz");
+                                    double changeRate = 0;
+                                    if (baseNav > 0) {
+                                        changeRate = (nav - baseNav) / baseNav * 100;
+                                    }
+                                    dayData.put("accumulatedChangeRate", Math.round(changeRate * 100) / 100.0);
+                                }
                             }
                             
-                            for (int i = 0; i < allData.size() && i < days; i++) {
-                                Map<String, Object> dayData = allData.get(i);
-                                double nav = (double) dayData.get("dwjz");
-                                
-                                // 累计涨跌幅（相对于最后一天）
-                                double changeRate = 0;
-                                if (baseNav > 0) {
-                                    changeRate = (nav - baseNav) / baseNav * 100;
-                                }
-                                dayData.put("changeRate", Math.round(changeRate * 100) / 100.0);
-                                
-                                // 涨跌幅日期（完整日期用于排序）
-                                SimpleDateFormat sdfFull = new SimpleDateFormat("yyyy-MM-dd");
-                                SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
-                                // 重新解析日期
-                                try {
-                                    int idx = array.size() - days + i;
-                                    if (idx >= 0 && idx < array.size()) {
-                                        JsonNode item = array.get(idx);
-                                        if (item.has("x")) {
-                                            long timestamp = item.get("x").asLong();
-                                            dayData.put("dateFull", sdfFull.format(new Date(timestamp)));
-                                        }
-                                    }
-                                } catch (Exception e) {
-                                    // ignore
-                                }
-                                
-                                result.add(dayData);
-                            }
+                            result.addAll(allData);
                         }
                     } catch (Exception e) {
                         e.printStackTrace();

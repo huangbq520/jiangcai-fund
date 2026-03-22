@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>基金估值查询系统</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -128,11 +128,11 @@
         }
         
         .quote-value.positive {
-            color: #e74c3c;
+            color: #ef4444;
         }
         
         .quote-value.negative {
-            color: #27ae60;
+            color: #22c55e;
         }
         
         /* 图表区域 */
@@ -149,8 +149,9 @@
         
         .chart-tabs {
             display: flex;
-            gap: 10px;
+            gap: 8px;
             margin-bottom: 15px;
+            flex-wrap: wrap;
         }
         
         .chart-tab {
@@ -170,34 +171,70 @@
         
         .chart-container {
             position: relative;
-            height: 300px;
+            height: 350px;
             width: 100%;
+        }
+        
+        /* 历史净值列表 */
+        .history-section {
+            margin-top: 30px;
+        }
+        
+        .history-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 15px;
         }
         
         .history-list {
             display: flex;
             flex-direction: column;
-            gap: 10px;
-            margin-top: 20px;
-            max-height: 300px;
+            gap: 8px;
+            max-height: 320px;
             overflow-y: auto;
         }
         
         .history-item {
             display: flex;
             justify-content: space-between;
-            padding: 15px 20px;
+            align-items: center;
+            padding: 12px 15px;
             background: #f8f9fa;
-            border-radius: 10px;
+            border-radius: 8px;
+            transition: background 0.2s;
+        }
+        
+        .history-item:hover {
+            background: #e9ecef;
         }
         
         .history-date {
             color: #666;
+            font-size: 0.9rem;
         }
         
-        .history-value {
-            font-weight: 600;
+        .history-nav {
             color: #333;
+            font-weight: 500;
+            font-size: 0.9rem;
+        }
+        
+        .history-change {
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+        
+        .change-positive {
+            color: #ef4444;
+        }
+        
+        .change-negative {
+            color: #22c55e;
+        }
+        
+        .change-zero {
+            color: #9ca3af;
         }
         
         .nav {
@@ -231,8 +268,8 @@
         .error {
             text-align: center;
             padding: 20px;
-            color: #e74c3c;
-            background: #fdeaea;
+            color: #ef4444;
+            background: #fef2f2;
             border-radius: 10px;
         }
         
@@ -272,11 +309,11 @@
         }
         
         .toast.success {
-            background: #27ae60;
+            background: #22c55e;
         }
         
         .toast.error {
-            background: #e74c3c;
+            background: #ef4444;
         }
     </style>
 </head>
@@ -328,21 +365,25 @@
                     更新时间：<span></span>
                 </div>
                 
-                <!-- 7天涨跌幅折线图 -->
+                <!-- 业绩走势图表 -->
                 <div class="chart-section">
-                    <div class="chart-title">📊 7日涨跌幅走势</div>
+                    <div class="chart-title">📊 业绩走势（涨跌幅）</div>
                     <div class="chart-tabs">
-                        <button class="chart-tab active" onclick="switchChart('nav')">净值走势</button>
-                        <button class="chart-tab" onclick="switchChart('change')">涨跌幅</button>
+                        <button class="chart-tab" onclick="switchPeriod(30)">近1个月</button>
+                        <button class="chart-tab" onclick="switchPeriod(90)">近3个月</button>
+                        <button class="chart-tab" onclick="switchPeriod(180)">近6个月</button>
+                        <button class="chart-tab active" onclick="switchPeriod(250)">近1年</button>
                     </div>
                     <div class="chart-container">
-                        <canvas id="navChart"></canvas>
+                        <div id="chart" style="width: 100%; height: 100%;"></div>
                     </div>
                 </div>
                 
                 <!-- 历史净值列表 -->
-                <div class="history-title" style="margin-top: 20px; font-size: 1.2rem; font-weight: 600; color: #333; margin-bottom: 15px;">历史净值</div>
-                <div class="history-list" id="historyList"></div>
+                <div class="history-section">
+                    <div class="history-title">📋 历史净值</div>
+                    <div class="history-list" id="historyList"></div>
+                </div>
             </div>
         </div>
         
@@ -357,8 +398,41 @@
     
     <script>
         let historyData = [];
-        let currentChartType = 'nav';
-        let navChart = null;
+        let currentPeriod = 250;
+        let chart = null;
+        let currentFundCode = '';
+        
+        // 初始化图表
+        function initChart() {
+            const chartDom = document.getElementById('chart');
+            chart = echarts.init(chartDom);
+            
+            // 响应式调整
+            window.addEventListener('resize', () => {
+                chart.resize();
+            });
+        }
+        
+        // 页面加载时初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            initChart();
+        });
+        
+        // 切换时间周期
+        function switchPeriod(days) {
+            currentPeriod = days;
+            
+            // 更新按钮状态
+            document.querySelectorAll('.chart-tab').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+            
+            // 重新查询数据
+            if (currentFundCode) {
+                queryFund(currentFundCode);
+            }
+        }
         
         // 表单提交
         document.getElementById('queryForm').addEventListener('submit', async (e) => {
@@ -370,6 +444,7 @@
                 return;
             }
             
+            currentFundCode = fundCode;
             await queryFund(fundCode);
         });
         
@@ -388,8 +463,8 @@
                 
                 displayQuote(quoteData);
                 
-                // 获取历史数据
-                const historyRes = await fetch('/api/fund/history?fundCode=' + fundCode + '&days=7');
+                // 获取历史数据（根据当前选择的时间周期）
+                const historyRes = await fetch('/api/fund/history?fundCode=' + fundCode + '&days=' + currentPeriod);
                 const history = await historyRes.json();
                 
                 historyData = history;
@@ -439,140 +514,182 @@
             }
         }
         
-        // 切换图表类型
-        function switchChart(type) {
-            currentChartType = type;
-            
-            // 更新按钮状态
-            document.querySelectorAll('.chart-tab').forEach(btn => {
-                btn.classList.remove('active');
-            });
-            event.target.classList.add('active');
-            
-            // 重新绘制图表
-            drawChart();
-        }
-        
-        // 绘制图表
+        // 绘制图表（使用ECharts）
         function drawChart() {
-            const ctx = document.getElementById('navChart').getContext('2d');
+            if (!chart || !historyData || historyData.length === 0) return;
             
-            // 销毁旧图表
-            if (navChart) {
-                navChart.destroy();
-            }
-            
-            if (!historyData || historyData.length === 0) return;
-            
-            // 反转数据顺序（让日期从左到右递增）
+            // 数据反转（让日期从左到右递增）
             const chartData = [...historyData].reverse();
             
-            const labels = chartData.map(d => d.date);
+            const dates = chartData.map(d => d.date);
+            const values = chartData.map(d => d.accumulatedChangeRate || 0);
             
-            let datasets;
-            let yAxisLabel;
+            // 判断整体涨跌
+            const isPositive = values[values.length - 1] >= 0;
+            const lineColor = isPositive ? '#ef4444' : '#22c55e';
+            const areaColor = isPositive 
+                ? 'rgba(239, 68, 68, 0.15)' 
+                : 'rgba(34, 197, 94, 0.15)';
             
-            if (currentChartType === 'nav') {
-                // 净值走势
-                datasets = [{
-                    label: '单位净值',
-                    data: chartData.map(d => d.dwjz),
-                    borderColor: '#667eea',
-                    backgroundColor: 'rgba(102, 126, 234, 0.1)',
-                    fill: true,
-                    tension: 0.4,
-                    pointRadius: 4,
-                    pointBackgroundColor: '#667eea'
-                }];
-                yAxisLabel = '净值';
-            } else {
-                // 涨跌幅
-                datasets = [{
-                    label: '涨跌幅 (%)',
-                    data: chartData.map(d => d.changeRate || 0),
-                    borderColor: '#f5576c',
-                    backgroundColor: chartData.map(d => (d.changeRate || 0) >= 0 ? 'rgba(231, 76, 60, 0.1)' : 'rgba(39, 174, 96, 0.1)'),
-                    fill: true,
-                    tension: 0.4,
-                    pointRadius: 4,
-                    pointBackgroundColor: chartData.map(d => (d.changeRate || 0) >= 0 ? '#e74c3c' : '#27ae60')
-                }];
-                yAxisLabel = '涨跌幅 (%)';
-            }
-            
-            navChart = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: labels,
-                    datasets: datasets
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    interaction: {
-                        intersect: false,
-                        mode: 'index'
+            const option = {
+                tooltip: {
+                    trigger: 'axis',
+                    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                    borderColor: '#e5e7eb',
+                    borderWidth: 1,
+                    textStyle: {
+                        color: '#333'
                     },
-                    plugins: {
-                        legend: {
-                            display: true,
-                            position: 'top'
-                        },
-                        tooltip: {
-                            callbacks: {
-                                label: function(context) {
-                                    if (currentChartType === 'nav') {
-                                        return '净值: ' + context.parsed.y.toFixed(4);
-                                    } else {
-                                        const value = context.parsed.y;
-                                        return '涨跌幅: ' + (value >= 0 ? '+' : '') + value.toFixed(2) + '%';
-                                    }
-                                }
-                            }
+                    formatter: function(params) {
+                        const data = params[0];
+                        const value = data.value;
+                        const sign = value >= 0 ? '+' : '';
+                        return `<strong>${data.name}</strong><br/>涨跌幅: ${sign}${value.toFixed(2)}%`;
+                    }
+                },
+                grid: {
+                    left: '3%',
+                    right: '4%',
+                    bottom: '3%',
+                    top: '10%',
+                    containLabel: true
+                },
+                xAxis: {
+                    type: 'category',
+                    data: dates,
+                    boundaryGap: false,
+                    axisLine: {
+                        lineStyle: {
+                            color: '#e5e7eb'
                         }
                     },
-                    scales: {
-                        x: {
-                            grid: {
-                                display: false
-                            }
-                        },
-                        y: {
-                            grid: {
-                                color: '#e0e0e0'
-                            },
-                            title: {
-                                display: true,
-                                text: yAxisLabel
-                            }
+                    axisLabel: {
+                        color: '#6b7280',
+                        fontSize: 11,
+                        interval: Math.floor(dates.length / 6)
+                    }
+                },
+                yAxis: {
+                    type: 'value',
+                    axisLine: {
+                        show: true,
+                        lineStyle: {
+                            color: '#e5e7eb'
+                        }
+                    },
+                    axisLabel: {
+                        color: '#6b7280',
+                        formatter: function(value) {
+                            const sign = value >= 0 ? '+' : '';
+                            return sign + value.toFixed(1) + '%';
+                        }
+                    },
+                    splitLine: {
+                        lineStyle: {
+                            color: '#f3f4f6'
                         }
                     }
-                }
-            });
+                },
+                dataZoom: [
+                    {
+                        type: 'inside',
+                        start: 0,
+                        end: 100
+                    },
+                    {
+                        type: 'slider',
+                        start: 0,
+                        end: 100,
+                        height: 20,
+                        bottom: 10,
+                        borderColor: '#e5e7eb',
+                        backgroundColor: '#f9fafb',
+                        fillerColor: 'rgba(102, 126, 234, 0.2)',
+                        handleStyle: {
+                            color: '#667eea'
+                        },
+                        textStyle: {
+                            color: '#6b7280'
+                        }
+                    }
+                ],
+                series: [
+                    {
+                        name: '涨跌幅',
+                        type: 'line',
+                        data: values,
+                        smooth: true,
+                        symbol: 'circle',
+                        symbolSize: 6,
+                        lineStyle: {
+                            color: lineColor,
+                            width: 2
+                        },
+                        itemStyle: {
+                            color: lineColor,
+                            borderColor: '#fff',
+                            borderWidth: 2
+                        },
+                        areaStyle: {
+                            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                                { offset: 0, color: areaColor },
+                                { offset: 1, color: 'rgba(255, 255, 255, 0)' }
+                            ])
+                        },
+                        markLine: {
+                            silent: true,
+                            symbol: 'none',
+                            data: [
+                                {
+                                    yAxis: 0,
+                                    lineStyle: {
+                                        color: '#9ca3af',
+                                        type: 'dashed',
+                                        width: 1
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            };
+            
+            chart.setOption(option);
         }
         
+        // 显示历史列表（带涨跌幅颜色）
         function displayHistory(data) {
             const container = document.getElementById('historyList');
             container.innerHTML = '';
             
             if (!data || data.length === 0) {
-                container.innerHTML = '<div class="history-item"><span>暂无历史数据</span></div>';
+                container.innerHTML = '<div class="history-item"><span style="color: #999;">暂无历史数据</span></div>';
                 return;
             }
             
             // 绘制图表
             drawChart();
             
-            // 显示历史列表
-            data.forEach(item => {
+            // 列表按日期倒序（最新在前）
+            const sortedData = [...data].reverse();
+            
+            sortedData.forEach(item => {
+                const changeRate = item.changeRate || 0;
+                const accumulatedRate = item.accumulatedChangeRate || 0;
+                
+                let changeClass = 'change-zero';
+                if (changeRate > 0) changeClass = 'change-positive';
+                else if (changeRate < 0) changeClass = 'change-negative';
+                
+                const changeSign = changeRate >= 0 ? '+' : '';
+                
                 const div = document.createElement('div');
                 div.className = 'history-item';
-                const changeRate = item.changeRate || 0;
                 div.innerHTML = `
-                    <span class="history-date">${item.date}</span>
-                    <span class="history-value ${changeRate >= 0 ? 'positive' : 'negative'}">
-                        ${item.dwjz.toFixed(4)} 
-                        (${changeRate >= 0 ? '+' : ''}${changeRate.toFixed(2)}%)
+                    <span class="history-date">${item.dateFull || item.date}</span>
+                    <span class="history-nav">${item.dwjz.toFixed(4)}</span>
+                    <span class="history-change ${changeClass}">
+                        ${changeSign}${changeRate.toFixed(2)}%
                     </span>
                 `;
                 container.appendChild(div);
