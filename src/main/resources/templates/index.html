@@ -544,12 +544,12 @@
         function drawChart() {
             if (!chart || !historyData || historyData.length === 0) return;
             
-            // API返回的数据已经是从旧到新（按日期升序），不需要反转
-            // 历史列表需要倒序显示（最新在前），所以分开处理
-            const chartData = historyData; // 保持升序用于图表
+            // API返回的数据是升序（早→晚），直接使用
+            const chartData = historyData;
             
             const dates = chartData.map(d => d.date);
-            const values = chartData.map(d => d.accumulatedChangeRate || 0);
+            // 使用当日涨跌幅
+            const values = chartData.map(d => d.dailyChangeRate || 0);
             
             // 判断整体涨跌（取最后一个数据点）
             const lastValue = values[values.length - 1];
@@ -575,7 +575,8 @@
                         const data = params[0];
                         const value = data.value;
                         const sign = value >= 0 ? '+' : '';
-                        return `<strong>${data.name}</strong><br/>涨跌幅: ${sign}${value.toFixed(2)}%`;
+                        // 显示当日涨跌幅
+                        return `<strong>${data.name}</strong><br/>当日涨跌幅: ${sign}${value.toFixed(2)}%`;
                     }
                 },
                 grid: {
@@ -708,8 +709,8 @@
             const sortedData = [...data].reverse();
             
             sortedData.forEach(item => {
-                const changeRate = item.changeRate || 0;
-                const accumulatedRate = item.accumulatedChangeRate || 0;
+                // 使用当日涨跌幅
+                const changeRate = item.dailyChangeRate || 0;
                 
                 let changeClass = 'change-zero';
                 if (changeRate > 0) changeClass = 'change-positive';

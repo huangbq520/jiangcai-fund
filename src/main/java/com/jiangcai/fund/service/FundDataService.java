@@ -181,28 +181,37 @@ public class FundDataService {
                                     dayData.put("dateFull", dateFull);
                                     dayData.put("dwjz", item.get("y").asDouble());
                                     
-                                    // 获取当日涨跌幅
-                                    if (item.has("changeRate")) {
-                                        dayData.put("changeRate", item.get("changeRate").asDouble());
-                                    } else if (item.has("equityReturn") && !item.get("equityReturn").isNull()) {
-                                        dayData.put("changeRate", item.get("equityReturn").asDouble());
-                                    }
+                                    // 当日涨跌幅由后面统一计算
+                                    // 注意：不再从API读取changeRate，避免冲突
                                     
                                     allData.add(dayData);
                                 }
                             }
                             
-                            // 计算累计涨跌幅（以最早一天为基准）
+                            // 计算累计涨跌幅和当日涨跌幅（以最早一天为基准）
                             if (allData.size() >= 2) {
                                 double baseNav = (double) allData.get(0).get("dwjz");
+                                double prevNav = baseNav;
                                 
-                                for (Map<String, Object> dayData : allData) {
+                                for (int i = 0; i < allData.size(); i++) {
+                                    Map<String, Object> dayData = allData.get(i);
                                     double nav = (double) dayData.get("dwjz");
-                                    double changeRate = 0;
+                                    
+                                    // 累计涨跌幅（以最早一天为基准）
+                                    double accumulatedChangeRate = 0;
                                     if (baseNav > 0) {
-                                        changeRate = (nav - baseNav) / baseNav * 100;
+                                        accumulatedChangeRate = (nav - baseNav) / baseNav * 100;
                                     }
-                                    dayData.put("accumulatedChangeRate", Math.round(changeRate * 100) / 100.0);
+                                    dayData.put("accumulatedChangeRate", Math.round(accumulatedChangeRate * 100) / 100.0);
+                                    
+                                    // 当日涨跌幅（以上一日为基准）
+                                    double dailyChangeRate = 0;
+                                    if (i > 0 && prevNav > 0) {
+                                        dailyChangeRate = (nav - prevNav) / prevNav * 100;
+                                    }
+                                    dayData.put("dailyChangeRate", Math.round(dailyChangeRate * 100) / 100.0);
+                                    
+                                    prevNav = nav;
                                 }
                             }
                             
