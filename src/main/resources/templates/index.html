@@ -173,6 +173,12 @@
             position: relative;
             height: 350px;
             width: 100%;
+            min-height: 350px;
+        }
+        
+        #chart {
+            width: 100% !important;
+            height: 350px !important;
         }
         
         /* 历史净值列表 */
@@ -405,18 +411,30 @@
         // 初始化图表
         function initChart() {
             const chartDom = document.getElementById('chart');
-            chart = echarts.init(chartDom);
+            if (!chartDom || chart) return;
+            
+            chart = echarts.init(chartDom, null, { renderer: 'canvas' });
             
             // 响应式调整
             window.addEventListener('resize', () => {
-                chart.resize();
+                if (chart) {
+                    chart.resize();
+                }
             });
         }
         
-        // 页面加载时初始化
-        document.addEventListener('DOMContentLoaded', function() {
-            initChart();
-        });
+        // 确保图表初始化和尺寸正确
+        function ensureChartReady() {
+            if (!chart) {
+                initChart();
+            }
+            // 延迟等待DOM渲染完成
+            setTimeout(() => {
+                if (chart) {
+                    chart.resize();
+                }
+            }, 100);
+        }
         
         // 切换时间周期
         function switchPeriod(days) {
@@ -451,6 +469,9 @@
         async function queryFund(fundCode) {
             showLoading();
             
+            // 确保图表已初始化
+            ensureChartReady();
+            
             try {
                 // 获取实时估值
                 const quoteRes = await fetch('/api/fund/quote?fundCode=' + fundCode);
@@ -471,6 +492,11 @@
                 displayHistory(history);
                 
                 showResult();
+                
+                // 图表绘制后调整尺寸
+                setTimeout(() => {
+                    if (chart) chart.resize();
+                }, 300);
             } catch (e) {
                 showError('查询失败: ' + e.message);
             } finally {
@@ -518,18 +544,23 @@
         function drawChart() {
             if (!chart || !historyData || historyData.length === 0) return;
             
-            // 数据反转（让日期从左到右递增）
-            const chartData = [...historyData].reverse();
+            // API返回的数据已经是从旧到新（按日期升序），不需要反转
+            // 历史列表需要倒序显示（最新在前），所以分开处理
+            const chartData = historyData; // 保持升序用于图表
             
             const dates = chartData.map(d => d.date);
             const values = chartData.map(d => d.accumulatedChangeRate || 0);
             
-            // 判断整体涨跌
-            const isPositive = values[values.length - 1] >= 0;
+            // 判断整体涨跌（取最后一个数据点）
+            const lastValue = values[values.length - 1];
+            const isPositive = lastValue >= 0;
             const lineColor = isPositive ? '#ef4444' : '#22c55e';
             const areaColor = isPositive 
                 ? 'rgba(239, 68, 68, 0.15)' 
                 : 'rgba(34, 197, 94, 0.15)';
+            
+            // X轴标签自适应间隔
+            const labelInterval = Math.max(0, Math.floor(dates.length / 8));
             
             const option = {
                 tooltip: {
@@ -550,7 +581,7 @@
                 grid: {
                     left: '3%',
                     right: '4%',
-                    bottom: '3%',
+                    bottom: '15%',
                     top: '10%',
                     containLabel: true
                 },
@@ -566,7 +597,8 @@
                     axisLabel: {
                         color: '#6b7280',
                         fontSize: 11,
-                        interval: Math.floor(dates.length / 6)
+                        interval: labelInterval,
+                        rotate: 0
                     }
                 },
                 yAxis: {
@@ -594,14 +626,15 @@
                     {
                         type: 'inside',
                         start: 0,
-                        end: 100
+                        end: 100,
+                        xAxisIndex: 0
                     },
                     {
                         type: 'slider',
                         start: 0,
                         end: 100,
                         height: 20,
-                        bottom: 10,
+                        bottom: 5,
                         borderColor: '#e5e7eb',
                         backgroundColor: '#f9fafb',
                         fillerColor: 'rgba(102, 126, 234, 0.2)',
@@ -610,7 +643,8 @@
                         },
                         textStyle: {
                             color: '#6b7280'
-                        }
+                        },
+                        xAxisIndex: 0
                     }
                 ],
                 series: [
@@ -654,7 +688,7 @@
                 ]
             };
             
-            chart.setOption(option);
+            chart.setOption(option, true); // true 表示不合并，完全替换
         }
         
         // 显示历史列表（带涨跌幅颜色）
