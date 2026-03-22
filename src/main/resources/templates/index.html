@@ -548,8 +548,10 @@
             const chartData = historyData;
             
             const dates = chartData.map(d => d.date);
-            // 使用当日涨跌幅
-            const values = chartData.map(d => d.dailyChangeRate || 0);
+            // 使用累计涨跌幅
+            const values = chartData.map(d => d.accumulatedChangeRate || 0);
+            // 获取每日涨跌幅用于tooltip
+            const dailyValues = chartData.map(d => d.dailyChangeRate || 0);
             
             // 判断整体涨跌（取最后一个数据点）
             const lastValue = values[values.length - 1];
@@ -574,9 +576,17 @@
                     formatter: function(params) {
                         const data = params[0];
                         const value = data.value;
+                        const index = data.dataIndex;
                         const sign = value >= 0 ? '+' : '';
-                        // 显示当日涨跌幅
-                        return `<strong>${data.name}</strong><br/>当日涨跌幅: ${sign}${value.toFixed(2)}%`;
+                        
+                        // 获取当日涨跌幅
+                        const dailyValue = dailyValues[index] || 0;
+                        const dailySign = dailyValue >= 0 ? '+' : '';
+                        
+                        // 显示：累计涨跌幅 + 当日涨跌幅
+                        return `<strong>${data.name}</strong><br/>` +
+                               `累计涨跌幅: ${sign}${value.toFixed(2)}%<br/>` +
+                               `当日涨跌幅: ${dailySign}${dailyValue.toFixed(2)}%`;
                     }
                 },
                 grid: {
