@@ -506,6 +506,10 @@
             }
         }
         
+        // 记录用户是否从搜索建议中选择了基金
+        let hasSelectedFromSuggestions = false;
+        let lastSelectedFundCode = null;
+        
         // 表单提交
         document.getElementById('queryForm').addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -514,18 +518,48 @@
             // 如果是6位数字，直接查询
             if (/^\d{6}$/.test(fundCode)) {
                 currentFundCode = fundCode;
+                hasSelectedFromSuggestions = false;
                 await queryFund(fundCode);
                 hideSearchSuggestions();
                 return;
             }
             
-            // 如果不是6位数字，尝试搜索
+            // 如果是中文输入
+            if (/[\u4e00-\u9fa5]/.test(fundCode)) {
+                // 检查是否从搜索建议中选择了基金
+                if (hasSelectedFromSuggestions && lastSelectedFundCode) {
+                    // 已选择建议项，使用选中的基金代码
+                    currentFundCode = lastSelectedFundCode;
+                    await queryFund(lastSelectedFundCode);
+                } else {
+                    // 未选择建议项，提示用户选择
+                    // 先搜索看看有没有匹配结果
+                    const results = await searchFunds(fundCode);
+                    if (results && results.length > 0) {
+                        showSearchSuggestions(results);
+                        showToast('请从搜索结果中选择匹配的基金', 'error');
+                    } else {
+                        showToast('未找到匹配的基金', 'error');
+                    }
+                }
+                hideSearchSuggestions();
+                return;
+            }
+            
+            // 如果不是6位数字也不是中文（可能是其他字符或混合输入），尝试搜索
             if (fundCode.length >= 2) {
                 const results = await searchFunds(fundCode);
                 if (results && results.length > 0) {
-                    // 直接选择第一个结果
-                    currentFundCode = results[0].fundCode;
-                    await queryFund(results[0].fundCode);
+                    // 检查是否已从建议中选择
+                    if (hasSelectedFromSuggestions && lastSelectedFundCode) {
+                        currentFundCode = lastSelectedFundCode;
+                    } else {
+                        // 提示用户选择
+                        showSearchSuggestions(results);
+                        showToast('请从搜索结果中选择匹配的基金', 'error');
+                        return;
+                    }
+                    await queryFund(currentFundCode);
                 } else {
                     showToast('未找到匹配的基金', 'error');
                 }
@@ -533,6 +567,9 @@
                 showToast('请输入6位基金代码或至少2个字符', 'error');
             }
             hideSearchSuggestions();
+            // 重置选择状态
+            hasSelectedFromSuggestions = false;
+            lastSelectedFundCode = null;
         });
         
         // 搜索建议功能
@@ -541,6 +578,12 @@
         
         searchInput.addEventListener('input', async (e) => {
             const keyword = e.target.value.trim();
+            
+            // 用户修改输入时，重置选择状态
+            if (keyword !== lastSelectedFundCode && !keyword.includes(lastSelectedFundCode)) {
+                hasSelectedFromSuggestions = false;
+                lastSelectedFundCode = null;
+            }
             
             // 清空之前的定时器
             if (searchTimeout) {
@@ -606,9 +649,21 @@
             document.getElementById('searchSuggestions').style.display = 'none';
         }
         
-        // 选择基金
+        // 选择基金（从搜索建议中选择）
         window.selectFund = async function(fundCode) {
-            document.getElementById('fundCode').value = fundCode;
+            // 记录用户选择了建议项
+            hasSelectedFromSuggestions = true;
+            lastSelectedFundCode = fundCode;
+            
+            // 显示选中的基金名称
+            const results = await searchFunds(fundCode);
+            if (results && results.length > 0) {
+                const fund = results.find(f => f.fundCode === fundCode);
+                if (fund) {
+                    document.getElementById('fundCode').value = fund.fundName + ' (' + fund.fundCode + ')';
+                }
+            }
+            
             hideSearchSuggestions();
             currentFundCode = fundCode;
             await queryFund(fundCode);
