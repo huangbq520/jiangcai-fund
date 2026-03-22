@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>基金估值查询系统</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+        }
+        
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+        }
+        
+        .header p {
+            opacity: 0.9;
+            font-size: 1.1rem;
+        }
+        
+        .card {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+            padding: 30px;
+            margin-bottom: 20px;
+        }
+        
+        .search-box {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .search-box input {
+            flex: 1;
+            padding: 15px 20px;
+            font-size: 16px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+        
+        .search-box input:focus {
+            border-color: #667eea;
+        }
+        
+        .search-box button {
+            padding: 15px 30px;
+            font-size: 16px;
+            font-weight: 600;
+            color: white;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        .search-box button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+        }
+        
+        .result-card {
+            display: none;
+        }
+        
+        .result-card.show {
+            display: block;
+        }
+        
+        .fund-name {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .quote-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 20px;
+        }
+        
+        .quote-item {
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 12px;
+        }
+        
+        .quote-label {
+            font-size: 0.9rem;
+            color: #666;
+            margin-bottom: 8px;
+        }
+        
+        .quote-value {
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: #333;
+        }
+        
+        .quote-value.positive {
+            color: #e74c3c;
+        }
+        
+        .quote-value.negative {
+            color: #27ae60;
+        }
+        
+        .history-section {
+            margin-top: 30px;
+        }
+        
+        .history-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 15px;
+        }
+        
+        .history-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        
+        .history-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 15px 20px;
+            background: #f8f9fa;
+            border-radius: 10px;
+        }
+        
+        .history-date {
+            color: #666;
+        }
+        
+        .history-value {
+            font-weight: 600;
+            color: #333;
+        }
+        
+        .nav {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin-top: 30px;
+        }
+        
+        .nav a {
+            display: inline-block;
+            padding: 12px 30px;
+            color: white;
+            text-decoration: none;
+            font-weight: 500;
+            background: rgba(255,255,255,0.2);
+            border-radius: 8px;
+            transition: background 0.3s;
+        }
+        
+        .nav a:hover {
+            background: rgba(255,255,255,0.3);
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+        
+        .error {
+            text-align: center;
+            padding: 20px;
+            color: #e74c3c;
+            background: #fdeaea;
+            border-radius: 10px;
+        }
+        
+        .update-time {
+            text-align: center;
+            color: #999;
+            font-size: 0.85rem;
+            margin-top: 10px;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+        
+        .update-time.show {
+            display: block;
+        }
+        
+        /* Toast notification */
+        .toast {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 15px 30px;
+            border-radius: 10px;
+            color: white;
+            font-weight: 500;
+            z-index: 1000;
+            opacity: 0;
+            transition: opacity 0.3s;
+            max-width: 80%;
+            text-align: center;
+        }
+        
+        .toast.show {
+            opacity: 1;
+        }
+        
+        .toast.success {
+            background: #27ae60;
+        }
+        
+        .toast.error {
+            background: #e74c3c;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📈 基金估值查询</h1>
+            <p>输入基金代码，查询实时估值和历史净值</p>
+        </div>
+        
+        <div class="card">
+            <form id="queryForm">
+                <div class="search-box">
+                    <input type="text" id="fundCode" name="fundCode" placeholder="请输入基金代码（如：161039）">
+                    <button type="submit">查询</button>
+                </div>
+            </form>
+            
+            <div id="loading" class="loading" style="display: none;">
+                正在查询，请稍候...
+            </div>
+            
+            <div id="error" class="error" style="display: none;"></div>
+            
+            <div id="result" class="result-card">
+                <div class="fund-name" id="fundName">-</div>
+                
+                <div class="quote-grid">
+                    <div class="quote-item">
+                        <div class="quote-label">单位净值</div>
+                        <div class="quote-value" id="dwjz">-</div>
+                    </div>
+                    <div class="quote-item">
+                        <div class="quote-label">涨跌幅</div>
+                        <div class="quote-value" id="zzjz">-</div>
+                    </div>
+                    <div class="quote-item">
+                        <div class="quote-label">净值变化</div>
+                        <div class="quote-value" id="changeDwjz">-</div>
+                    </div>
+                    <div class="quote-item">
+                        <div class="quote-label">基金代码</div>
+                        <div class="quote-value" id="code">-</div>
+                    </div>
+                </div>
+                
+                <!-- 更新时间 -->
+                <div class="update-time" id="updateTime" style="display: none;">
+                    更新时间：<span></span>
+                </div>
+                
+                <div class="history-section">
+                    <div class="history-title">📊 最近7天净值走势</div>
+                    <canvas id="navChart" width="700" height="200" style="width: 100%; max-width: 700px; height: 200px;"></canvas>
+                    <div class="history-list" id="historyList"></div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="nav">
+            <a href="/">基金查询</a>
+            <a href="/hold">持仓管理</a>
+        </div>
+    </div>
+    
+    <script>
+        // Handle form submission
+        document.getElementById('queryForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            queryFund();
+        });
+        
+        function handleKeyPress(event) {
+            if (event.key === 'Enter') {
+                queryFund();
+            }
+        }
+        
+        async function queryFund() {
+            const fundCode = document.getElementById('fundCode').value.trim();
+            
+            if (!fundCode) {
+                showError('请输入基金代码');
+                return;
+            }
+            
+            hideError();
+            showLoading();
+            
+            try {
+                // 查询实时估值
+                const quoteRes = await fetch('/api/fund/quote?fundCode=' + fundCode);
+                const quoteData = await quoteRes.json();
+                
+                if (!quoteData.success) {
+                    showError(quoteData.message || '未找到该基金');
+                    return;
+                }
+                
+                displayQuote(quoteData);
+                
+                // 查询历史净值
+                const historyRes = await fetch('/api/fund/history?fundCode=' + fundCode + '&days=7');
+                const historyData = await historyRes.json();
+                
+                displayHistory(historyData);
+                
+                showResult();
+            } catch (e) {
+                showError('查询失败: ' + e.message);
+            } finally {
+                hideLoading();
+            }
+        }
+        
+        function displayQuote(data) {
+            document.getElementById('fundName').textContent = data.fundName || data.fundCode;
+            document.getElementById('dwjz').textContent = data.dwjz || '-';
+            document.getElementById('code').textContent = data.fundCode;
+            
+            // 显示更新时间
+            const updateTimeEl = document.getElementById('updateTime');
+            if (data.updateTime) {
+                updateTimeEl.querySelector('span').textContent = data.updateTime;
+                updateTimeEl.classList.add('show');
+            } else {
+                updateTimeEl.classList.remove('show');
+            }
+            
+            const zzjz = data.zzjz;
+            const zzjzEl = document.getElementById('zzjz');
+            if (zzjz !== undefined && zzjz !== null) {
+                const sign = zzjz >= 0 ? '+' : '';
+                zzjzEl.textContent = sign + zzjz + '%';
+                zzjzEl.className = 'quote-value ' + (zzjz >= 0 ? 'positive' : 'negative');
+            } else {
+                zzjzEl.textContent = '-';
+                zzjzEl.className = 'quote-value';
+            }
+            
+            const changeDwjz = data.changeDwjz;
+            const changeDwjzEl = document.getElementById('changeDwjz');
+            if (changeDwjz !== undefined && changeDwjz !== null) {
+                const sign = changeDwjz >= 0 ? '+' : '';
+                changeDwjzEl.textContent = sign + changeDwjz;
+                changeDwjzEl.className = 'quote-value ' + (changeDwjz >= 0 ? 'positive' : 'negative');
+            } else {
+                changeDwjzEl.textContent = '-';
+                changeDwjzEl.className = 'quote-value';
+            }
+        }
+        
+        // 绘制折线图
+        function drawChart(data) {
+            const canvas = document.getElementById('navChart');
+            const ctx = canvas.getContext('2d');
+            
+            // 设置canvas尺寸为实际显示尺寸
+            const rect = canvas.getBoundingClientRect();
+            canvas.width = rect.width * 2;
+            canvas.height = rect.height * 2;
+            ctx.scale(2, 2);
+            
+            const width = rect.width;
+            const height = rect.height;
+            const padding = 40;
+            
+            // 清空画布
+            ctx.clearRect(0, 0, width, height);
+            
+            if (!data || data.length === 0) return;
+            
+            // 获取数据范围
+            const values = data.map(d => d.dwjz);
+            const minVal = Math.min(...values);
+            const maxVal = Math.max(...values);
+            const range = maxVal - minVal || 1;
+            
+            // 绘制网格线
+            ctx.strokeStyle = '#e0e0e0';
+            ctx.lineWidth = 1;
+            ctx.setLineDash([5, 5]);
+            
+            // 绘制Y轴网格
+            for (let i = 0; i <= 4; i++) {
+                const y = padding + (height - 2 * padding) * i / 4;
+                ctx.beginPath();
+                ctx.moveTo(padding, y);
+                ctx.lineTo(width - padding, y);
+                ctx.stroke();
+                
+                // Y轴标签
+                const val = maxVal - range * i / 4;
+                ctx.fillStyle = '#999';
+                ctx.font = '10px Arial';
+                ctx.textAlign = 'right';
+                ctx.fillText(val.toFixed(4), padding - 5, y + 4);
+            }
+            
+            ctx.setLineDash([]);
+            
+            // 绘制折线
+            const points = data.map((d, i) => ({
+                x: padding + (width - 2 * padding) * i / (data.length - 1),
+                y: padding + (height - 2 * padding) * (1 - (d.dwjz - minVal) / range)
+            }));
+            
+            // 渐变填充
+            const gradient = ctx.createLinearGradient(0, padding, 0, height - padding);
+            gradient.addColorStop(0, 'rgba(102, 126, 234, 0.3)');
+            gradient.addColorStop(1, 'rgba(102, 126, 234, 0.05)');
+            
+            ctx.beginPath();
+            ctx.moveTo(points[0].x, height - padding);
+            points.forEach(p => ctx.lineTo(p.x, p.y));
+            ctx.lineTo(points[points.length - 1].x, height - padding);
+            ctx.closePath();
+            ctx.fillStyle = gradient;
+            ctx.fill();
+            
+            // 绘制线条
+            ctx.beginPath();
+            ctx.strokeStyle = '#667eea';
+            ctx.lineWidth = 2;
+            points.forEach((p, i) => {
+                if (i === 0) ctx.moveTo(p.x, p.y);
+                else ctx.lineTo(p.x, p.y);
+            });
+            ctx.stroke();
+            
+            // 绘制点和标签
+            points.forEach((p, i) => {
+                const d = data[i];
+                
+                // 点
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, 4, 0, 2 * Math.PI);
+                ctx.fillStyle = '#667eea';
+                ctx.fill();
+                ctx.strokeStyle = 'white';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+                
+                // X轴标签
+                ctx.fillStyle = '#666';
+                ctx.font = '10px Arial';
+                ctx.textAlign = 'center';
+                const dateLabel = d.date.substring(5); // 只显示月-日
+                ctx.fillText(dateLabel, p.x, height - padding + 20);
+            });
+        }
+        
+        function displayHistory(data) {
+            const container = document.getElementById('historyList');
+            container.innerHTML = '';
+            
+            if (!data || data.length === 0) {
+                container.innerHTML = '<div class="history-item"><span>暂无历史数据</span></div>';
+                return;
+            }
+            
+            // 绘制折线图
+            drawChart(data);
+            
+            data.forEach(item => {
+                const div = document.createElement('div');
+                div.className = 'history-item';
+                div.innerHTML = `
+                    <span class="history-date">${item.date}</span>
+                    <span class="history-value">${item.dwjz.toFixed(4)}</span>
+                `;
+                container.appendChild(div);
+            });
+        }
+        
+        function showToast(message, type) {
+            const existingToast = document.querySelector('.toast');
+            if (existingToast) existingToast.remove();
+            
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.textContent = message;
+            document.body.appendChild(toast);
+            
+            // 显示动画
+            setTimeout(() => toast.classList.add('show'), 10);
+            
+            // 3秒后隐藏
+            setTimeout(() => {
+                toast.classList.remove('show');
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+        
+        function showLoading() {
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('result').classList.remove('show');
+            document.getElementById('error').style.display = 'none';
+        }
+        
+        function hideLoading() {
+            document.getElementById('loading').style.display = 'none';
+        }
+        
+        function showError(msg) {
+            document.getElementById('error').textContent = msg;
+            document.getElementById('error').style.display = 'block';
+            document.getElementById('result').classList.remove('show');
+        }
+        
+        function hideError() {
+            document.getElementById('error').style.display = 'none';
+        }
+        
+        function showResult() {
+            document.getElementById('result').classList.add('show');
+        }
+    </script>
+</body>
+</html>
