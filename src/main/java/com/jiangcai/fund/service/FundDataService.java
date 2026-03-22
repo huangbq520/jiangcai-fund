@@ -34,34 +34,35 @@ public class FundDataService {
     public List<Map<String, Object>> searchFunds(String keyword) {
         List<Map<String, Object>> result = new ArrayList<>();
         try {
-            // 东方财富基金搜索接口
-            String url = "https://fund.eastmoney.com/ajax/search/search?q=" + keyword;
+            // 天天基金网搜索接口
+            long timestamp = System.currentTimeMillis();
+            String url = "https://fundsuggest.eastmoney.com/FundSearch/api/FundSearchAPI.ashx?callback=jQuery&m=1&t=1&key=" + 
+                         java.net.URLEncoder.encode(keyword, "UTF-8") + "&_=" + timestamp;
             
             HttpHeaders headers = new HttpHeaders();
             headers.set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
-            headers.set("Accept", "application/json");
+            headers.set("Accept", "*/*");
             headers.set("Referer", "https://fund.eastmoney.com/");
             
             HttpEntity<String> entity = new HttpEntity<>(headers);
             ResponseEntity<byte[]> response = restTemplate.exchange(url, HttpMethod.GET, entity, byte[].class);
             String responseBody = new String(response.getBody(), StandardCharsets.UTF_8);
             
-            if (responseBody != null && responseBody.contains("datas")) {
-                // 解析搜索结果
-                Pattern datasPattern = Pattern.compile("\"datas\":\\s*(\\[.+?\\])");
-                Matcher datasMatcher = datasPattern.matcher(responseBody);
+            if (responseBody != null && responseBody.contains("Data")) {
+                // 解析JSONP响应
+                Pattern dataPattern = Pattern.compile("\"Data\":\\s*(\\[.+?\\])");
+                Matcher dataMatcher = dataPattern.matcher(responseBody);
                 
-                if (datasMatcher.find()) {
-                    String datasStr = datasMatcher.group(1);
+                if (dataMatcher.find()) {
+                    String datasStr = dataMatcher.group(1);
                     JsonNode array = objectMapper.readTree(datasStr);
                     
                     if (array.isArray()) {
                         for (JsonNode item : array) {
                             Map<String, Object> fund = new HashMap<>();
-                            fund.put("fundCode", item.has("FUNDCODE") ? item.get("FUNDCODE").asText() : "");
-                            fund.put("fundName", item.has("SHORTNAME") ? item.get("SHORTNAME").asText() : 
-                                           (item.has("FUNDNAME") ? item.get("FUNDNAME").asText() : ""));
-                            fund.put("type", item.has("FTYPE") ? item.get("FTYPE").asText() : "");
+                            fund.put("fundCode", item.has("CODE") ? item.get("CODE").asText() : "");
+                            fund.put("fundName", item.has("NAME") ? item.get("NAME").asText() : "");
+                            fund.put("type", item.has("TYPE") ? item.get("TYPE").asText() : "");
                             
                             // 只添加有效的基金（6位代码）
                             String code = (String) fund.get("fundCode");
@@ -268,8 +269,8 @@ public class FundDataService {
                                 }
                             }
                             
-                            // // 反转列表，按日期升序排列（最早的在前）
-                            // Collections.reverse(allData);
+                            // 反转列表，按日期升序排列（最早的在前）
+                            Collections.reverse(allData);
                             
                             result.addAll(allData);
                         }
