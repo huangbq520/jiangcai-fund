@@ -57,16 +57,6 @@ public class FundHoldService {
                                 .setScale(2, RoundingMode.HALF_UP);
                         holding.setCurrentValue(currentValue);
                         
-                        // 计算当日收益
-                        if (yesterdayNav != null && yesterdayNav.compareTo(BigDecimal.ZERO) > 0) {
-                            holding.setCurrentPrice(currentPrice);
-                            // 当日收益 = 持有份额 × (当前净值 - 昨日净值)
-                            BigDecimal dailyReturn = holding.getHoldingAmount()
-                                    .multiply(currentPrice.subtract(yesterdayNav))
-                                    .setScale(2, RoundingMode.HALF_UP);
-                            holding.setProfitLoss(dailyReturn);
-                        }
-                        
                         // 计算持有收益 = 当前市值 - 总成本
                         BigDecimal profitLoss = currentValue.subtract(holding.getTotalCost())
                                 .setScale(2, RoundingMode.HALF_UP);
@@ -83,12 +73,10 @@ public class FundHoldService {
                         totalAssets = totalAssets.add(currentValue);
                         totalCost = totalCost.add(holding.getTotalCost());
                         
-                        // 当日收益累加（如果有昨日净值）
-                        Map<String, Object> latestInfo = fundDataService.getFundQuote(holding.getFundCode());
-                        if (latestInfo.containsKey("yesterdayNav")) {
-                            BigDecimal yesterday = (BigDecimal) latestInfo.get("yesterdayNav");
+                        // 当日收益累加（复用已获取的 fundInfo，无需重复请求）
+                        if (yesterdayNav != null && yesterdayNav.compareTo(BigDecimal.ZERO) > 0) {
                             BigDecimal dailyRet = holding.getHoldingAmount()
-                                    .multiply(currentPrice.subtract(yesterday))
+                                    .multiply(currentPrice.subtract(yesterdayNav))
                                     .setScale(2, RoundingMode.HALF_UP);
                             totalDailyReturn = totalDailyReturn.add(dailyRet);
                         }
