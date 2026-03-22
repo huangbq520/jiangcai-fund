@@ -268,9 +268,7 @@ public class FundDataService {
                                     prevNav = nav;
                                 }
                             }
-                            
-                            // 反转列表，按日期升序排列（最早的在前）
-                            Collections.reverse(allData);
+
                             
                             result.addAll(allData);
                         }
