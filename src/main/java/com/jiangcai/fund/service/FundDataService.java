@@ -25,7 +25,7 @@ public class FundDataService {
         this.restTemplate = new RestTemplate();
         this.objectMapper = new ObjectMapper();
     }
-    
+
     /**
      * 搜索基金（按基金代码或基金名称模糊匹配）
      * @param keyword 基金代码或名称关键词
@@ -34,49 +34,63 @@ public class FundDataService {
     public List<Map<String, Object>> searchFunds(String keyword) {
         List<Map<String, Object>> result = new ArrayList<>();
         try {
-            // 天天基金网搜索接口
+            // 1. 关键词URL编码 + 时间戳防缓存
+            String encodedKeyword = java.net.URLEncoder.encode(keyword, StandardCharsets.UTF_8.name());
             long timestamp = System.currentTimeMillis();
-            String url = "https://fundsuggest.eastmoney.com/FundSearch/api/FundSearchAPI.ashx?callback=jQuery&m=1&t=1&key=" + 
-                         java.net.URLEncoder.encode(keyword, "UTF-8") + "&_=" + timestamp;
-            
+            String url = "https://fundsuggest.eastmoney.com/FundSearch/api/FundSearchAPI.ashx"
+                    + "?callback=jQuery&m=1&t=1&key=" + encodedKeyword + "&_=" + timestamp;
+
+            // 2. 完整请求头（避免风控拦截）
             HttpHeaders headers = new HttpHeaders();
-            headers.set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
-            headers.set("Accept", "*/*");
+            headers.set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
+            headers.set("Accept", "application/javascript, text/javascript, */*; q=0.01");
             headers.set("Referer", "https://fund.eastmoney.com/");
-            
+            headers.set("X-Requested-With", "XMLHttpRequest");
+            headers.set("Cookie", "EMFUND1=null; EMFUND2=null;");
+
             HttpEntity<String> entity = new HttpEntity<>(headers);
             ResponseEntity<byte[]> response = restTemplate.exchange(url, HttpMethod.GET, entity, byte[].class);
             String responseBody = new String(response.getBody(), StandardCharsets.UTF_8);
-            
-            if (responseBody != null && responseBody.contains("Data")) {
-                // 解析JSONP响应
-                Pattern dataPattern = Pattern.compile("\"Data\":\\s*(\\[.+?\\])");
-                Matcher dataMatcher = dataPattern.matcher(responseBody);
-                
-                if (dataMatcher.find()) {
-                    String datasStr = dataMatcher.group(1);
-                    JsonNode array = objectMapper.readTree(datasStr);
-                    
-                    if (array.isArray()) {
-                        for (JsonNode item : array) {
-                            Map<String, Object> fund = new HashMap<>();
-                            fund.put("fundCode", item.has("CODE") ? item.get("CODE").asText() : "");
-                            fund.put("fundName", item.has("NAME") ? item.get("NAME").asText() : "");
-                            fund.put("type", item.has("TYPE") ? item.get("TYPE").asText() : "");
-                            
-                            // 只添加有效的基金（6位代码）
-                            String code = (String) fund.get("fundCode");
-                            if (code != null && code.matches("\\d{6}")) {
-                                result.add(fund);
-                            }
+
+            // 调试：打印原始返回
+            System.out.println("接口原始返回：" + responseBody);
+
+            if (responseBody != null && !responseBody.isEmpty() && responseBody.contains("Datas")) {
+                // 3. 解析JSONP：剥掉 jQuery(...) 外壳
+                String jsonStr = responseBody.replaceAll("^jQuery\\(", "").replaceAll("\\);$", "");
+                JsonNode root = objectMapper.readTree(jsonStr);
+                JsonNode dataArray = root.get("Datas"); // 关键：用Datas（带s）
+
+                if (dataArray != null && dataArray.isArray()) {
+                    for (JsonNode item : dataArray) {
+                        // 4. 只保留基金类型（CATEGORY=700），排除高端理财/指数
+                        if (!item.has("CATEGORY") || item.get("CATEGORY").asInt() != 700) {
+                            continue;
+                        }
+
+                        Map<String, Object> fund = new HashMap<>();
+                        // 5. 正确解析字段：CODE/NAME/TYPE
+                        String fundCode = item.has("CODE") ? item.get("CODE").asText() : "";
+                        String fundName = item.has("NAME") ? item.get("NAME").asText() : "";
+                        // 从FundBaseInfo里取基金类型（FTYPE）
+                        String type = item.has("FundBaseInfo") && item.get("FundBaseInfo").has("FTYPE")
+                                ? item.get("FundBaseInfo").get("FTYPE").asText() : "";
+
+                        // 6. 只保留6位数字的有效基金代码
+                        if (fundCode != null && fundCode.matches("\\d{6}")) {
+                            fund.put("fundCode", fundCode);
+                            fund.put("fundName", fundName);
+                            fund.put("type", type);
+                            result.add(fund);
                         }
                     }
                 }
             }
         } catch (Exception e) {
+            System.err.println("基金搜索失败：" + e.getMessage());
             e.printStackTrace();
         }
-        
+
         return result;
     }
     

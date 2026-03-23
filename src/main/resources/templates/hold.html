@@ -458,7 +458,7 @@
         
         // 更新概览卡片
         function updateOverviewCards(data) {
-            document.getElementById('totalAssets').textContent = formatCurrency(data.totalAssets);
+            document.getElementById('totalAssets').textContent = '¥' + data.totalAssets;
             document.getElementById('fundCount').textContent = data.fundCount || 0;
             
             const dailyReturnEl = document.getElementById('dailyReturn');
@@ -567,8 +567,8 @@
         function formatCurrency(num) {
             if (num === null || num === undefined) return '¥0.00';
             const value = parseFloat(num);
-            const sign = value >= 0 ? '+' : '';
-            return sign + '¥' + Math.abs(value).toFixed(2);
+            const sign = value >= 0 ? '+' : '-';
+            return '¥' + sign + Math.abs(value).toFixed(2);
         }
         
         // 格式化数字
