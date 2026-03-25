@@ -2,9 +2,10 @@ package com.jiangcai.fund.controller;
 
 import com.jiangcai.fund.dto.PortfolioOverview;
 import com.jiangcai.fund.entity.FundStockHolding;
+import com.jiangcai.fund.security.UserPrincipal;
 import com.jiangcai.fund.service.FundHoldService;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.stereotype.Controller;
-import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
 import java.math.BigDecimal;
 import java.util.HashMap;
@@ -26,10 +27,10 @@ public class FundHoldController {
      */
     @GetMapping("/overview")
     @ResponseBody
-    public Map<String, Object> getPortfolioOverview() {
+    public Map<String, Object> getPortfolioOverview(@AuthenticationPrincipal UserPrincipal principal) {
         Map<String, Object> result = new HashMap<>();
         try {
-            PortfolioOverview overview = fundHoldService.getPortfolioOverview();
+            PortfolioOverview overview = fundHoldService.getPortfolioOverview(principal.getUserId());
             result.put("success", true);
             result.put("data", overview);
         } catch (Exception e) {
@@ -44,10 +45,10 @@ public class FundHoldController {
      */
     @GetMapping("/list")
     @ResponseBody
-    public Map<String, Object> getHoldings() {
+    public Map<String, Object> getHoldings(@AuthenticationPrincipal UserPrincipal principal) {
         Map<String, Object> result = new HashMap<>();
         try {
-            List<FundStockHolding> holdings = fundHoldService.getAllHoldings();
+            List<FundStockHolding> holdings = fundHoldService.getAllHoldings(principal.getUserId());
             result.put("success", true);
             result.put("data", holdings);
         } catch (Exception e) {
@@ -62,10 +63,10 @@ public class FundHoldController {
      */
     @PostMapping("/refresh")
     @ResponseBody
-    public Map<String, Object> refreshHoldings() {
+    public Map<String, Object> refreshHoldings(@AuthenticationPrincipal UserPrincipal principal) {
         Map<String, Object> result = new HashMap<>();
         try {
-            List<FundStockHolding> holdings = fundHoldService.refreshAllHoldings();
+            List<FundStockHolding> holdings = fundHoldService.refreshAllHoldings(principal.getUserId());
             result.put("success", true);
             result.put("data", holdings);
         } catch (Exception e) {
@@ -83,8 +84,9 @@ public class FundHoldController {
     public Map<String, Object> addHolding(
             @RequestParam String fundCode,
             @RequestParam BigDecimal amount,
-            @RequestParam(required = false) BigDecimal price) {
-        return fundHoldService.addHolding(fundCode, amount, price);
+            @RequestParam(required = false) BigDecimal price,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return fundHoldService.addHolding(fundCode, amount, price, principal.getUserId());
     }
     
     /**
@@ -94,8 +96,9 @@ public class FundHoldController {
     @ResponseBody
     public Map<String, Object> sellHolding(
             @RequestParam String fundCode,
-            @RequestParam BigDecimal amount) {
-        return fundHoldService.sellHolding(fundCode, amount);
+            @RequestParam BigDecimal amount,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return fundHoldService.sellHolding(fundCode, amount, principal.getUserId());
     }
     
     /**
@@ -103,11 +106,14 @@ public class FundHoldController {
      */
     @PostMapping("/delete")
     @ResponseBody
-    public Map<String, Object> deleteHolding(@RequestParam String fundCode) {
+    public Map<String, Object> deleteHolding(
+            @RequestParam String fundCode,
+            @AuthenticationPrincipal UserPrincipal principal) {
         Map<String, Object> result = new HashMap<>();
         try {
-            fundHoldService.getHoldingByFundCode(fundCode).ifPresent(holding -> {
-                fundHoldService.sellHolding(fundCode, holding.getHoldingAmount());
+            Long userId = principal.getUserId();
+            fundHoldService.getHoldingByFundCode(fundCode, userId).ifPresent(holding -> {
+                fundHoldService.sellHolding(fundCode, holding.getHoldingAmount(), userId);
             });
             result.put("success", true);
             result.put("message", "删除成功");

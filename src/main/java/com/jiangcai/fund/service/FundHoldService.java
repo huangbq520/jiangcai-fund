@@ -23,18 +23,18 @@ public class FundHoldService {
     }
     
     /**
-     * 获取所有持仓
+     * 获取指定用户的所有持仓
      */
-    public List<FundStockHolding> getAllHoldings() {
-        return repository.findAll();
+    public List<FundStockHolding> getAllHoldings(Long userId) {
+        return repository.findByUserId(userId);
     }
     
     /**
      * 获取持仓概览（含当日收益计算）
      */
-    public PortfolioOverview getPortfolioOverview() {
+    public PortfolioOverview getPortfolioOverview(Long userId) {
         PortfolioOverview overview = new PortfolioOverview();
-        List<FundStockHolding> holdings = repository.findAll();
+        List<FundStockHolding> holdings = repository.findByUserId(userId);
         
         BigDecimal totalAssets = BigDecimal.ZERO;
         BigDecimal totalDailyReturn = BigDecimal.ZERO;
@@ -176,17 +176,17 @@ public class FundHoldService {
     }
     
     /**
-     * 根据基金代码获取持仓
+     * 根据基金代码获取持仓（指定用户）
      */
-    public Optional<FundStockHolding> getHoldingByFundCode(String fundCode) {
-        return repository.findByFundCode(fundCode);
+    public Optional<FundStockHolding> getHoldingByFundCode(String fundCode, Long userId) {
+        return repository.findByFundCodeAndUserId(fundCode, userId);
     }
     
     /**
      * 添加或更新持仓（买入）
      */
     @Transactional
-    public Map<String, Object> addHolding(String fundCode, BigDecimal amount, BigDecimal price) {
+    public Map<String, Object> addHolding(String fundCode, BigDecimal amount, BigDecimal price, Long userId) {
         Map<String, Object> result = new java.util.HashMap<>();
         
         // 获取基金信息
@@ -208,7 +208,7 @@ public class FundHoldService {
         BigDecimal totalCost = amount.multiply(currentPrice).setScale(2, RoundingMode.HALF_UP);
         
         // 检查是否已有持仓
-        Optional<FundStockHolding> existingOpt = repository.findByFundCode(fundCode);
+        Optional<FundStockHolding> existingOpt = repository.findByFundCodeAndUserId(fundCode, userId);
         
         FundStockHolding holding;
         if (existingOpt.isPresent()) {
@@ -233,6 +233,7 @@ public class FundHoldService {
         } else {
             // 新增持仓
             holding = new FundStockHolding();
+            holding.setUserId(userId);
             holding.setFundCode(fundCode);
             holding.setFundName(fundName);
             holding.setHoldingAmount(amount);
@@ -259,10 +260,10 @@ public class FundHoldService {
      * 卖出持仓
      */
     @Transactional
-    public Map<String, Object> sellHolding(String fundCode, BigDecimal amount) {
+    public Map<String, Object> sellHolding(String fundCode, BigDecimal amount, Long userId) {
         Map<String, Object> result = new java.util.HashMap<>();
         
-        Optional<FundStockHolding> existingOpt = repository.findByFundCode(fundCode);
+        Optional<FundStockHolding> existingOpt = repository.findByFundCodeAndUserId(fundCode, userId);
         
         if (!existingOpt.isPresent()) {
             result.put("success", false);
@@ -317,11 +318,11 @@ public class FundHoldService {
     }
     
     /**
-     * 更新所有持仓的当前价格和盈亏
+     * 更新指定用户所有持仓的当前价格和盈亏
      */
     @Transactional
-    public List<FundStockHolding> refreshAllHoldings() {
-        List<FundStockHolding> holdings = repository.findAll();
+    public List<FundStockHolding> refreshAllHoldings(Long userId) {
+        List<FundStockHolding> holdings = repository.findByUserId(userId);
         
         for (FundStockHolding holding : holdings) {
             try {
