@@ -332,6 +332,11 @@
         <div class="header">
             <h1>📊 基金持仓管理</h1>
             <p>实时估值 · 智能持仓 · 收益分析</p>
+            <div style="margin-top:10px;font-size:0.95rem;">
+                👤 <span id="usernameDisplay"></span>
+                &nbsp;|&nbsp;
+                <a href="#" onclick="logout()" style="color:rgba(255,255,255,0.85);text-decoration:underline;">退出登录</a>
+            </div>
         </div>
         
         <!-- 持仓概览 -->
@@ -431,16 +436,42 @@
     <script>
         let portfolioData = null;
         let currentSort = { field: 'positionRatio', desc: true };
-        
+
+        // JWT 辅助函数
+        function getToken() { return localStorage.getItem('jwtToken'); }
+        function authHeaders() {
+            const t = getToken();
+            return t ? { 'Authorization': 'Bearer ' + t } : {};
+        }
+        async function authFetch(url, opts = {}) {
+            opts.headers = Object.assign({}, opts.headers || {}, authHeaders());
+            const res = await fetch(url, opts);
+            if (res.status === 401) { window.location.href = '/login'; throw new Error('未登录'); }
+            return res;
+        }
+
         // 页面加载时获取数据
         document.addEventListener('DOMContentLoaded', function() {
+            if (!getToken()) { window.location.href = '/login'; return; }
+            // 显示用户名
+            const uname = localStorage.getItem('username');
+            if (uname) document.getElementById('usernameDisplay').textContent = uname;
             loadPortfolioOverview();
         });
-        
+
+        // 退出登录
+        function logout() {
+            localStorage.removeItem('jwtToken');
+            localStorage.removeItem('username');
+            localStorage.removeItem('userId');
+            window.location.href = '/login';
+        }
+
         // 加载持仓概览数据
         async function loadPortfolioOverview() {
             try {
-                const res = await fetch('/api/hold/overview');
+                // const res = await fetch('/api/hold/overview');
+                const res = await authFetch('/api/hold/overview');
                 const data = await res.json();
                 
                 if (data.success) {
@@ -620,7 +651,8 @@
             if (price) params.append('price', price);
             
             try {
-                const res = await fetch('/api/hold/add?' + params.toString(), { method: 'POST' });
+                // const res = await fetch('/api/hold/add?' + params.toString(), { method: 'POST' });
+                const res = await authFetch('/api/hold/add?' + params.toString(), { method: 'POST' });
                 const data = await res.json();
                 
                 if (data.success) {
@@ -651,7 +683,7 @@
             }
             
             try {
-                const res = await fetch('/api/hold/sell?fundCode=' + fundCode + '&amount=' + amount, {
+                const res = await authFetch('/api/hold/sell?fundCode=' + fundCode + '&amount=' + amount, {
                     method: 'POST'
                 });
                 const data = await res.json();

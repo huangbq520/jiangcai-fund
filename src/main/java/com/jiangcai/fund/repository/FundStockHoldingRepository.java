@@ -8,10 +8,10 @@ import java.util.Optional;
 
 @Repository
 public interface FundStockHoldingRepository extends JpaRepository<FundStockHolding, Long> {
-    
-    List<FundStockHolding> findAll();
-    
-    Optional<FundStockHolding> findByFundCode(String fundCode);
-    
-    void deleteByFundCode(String fundCode);
+
+    List<FundStockHolding> findByUserId(Long userId);
+
+    Optional<FundStockHolding> findByFundCodeAndUserId(String fundCode, Long userId);
+
+    void deleteByFundCodeAndUserId(String fundCode, Long userId);
 }

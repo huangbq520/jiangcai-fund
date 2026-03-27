@@ -326,6 +326,7 @@
         .search-suggestions {
             position: absolute;
             width: calc(100% - 60px);
+            max-width: 740px;
             max-height: 300px;
             overflow-y: auto;
             background: white;
@@ -379,6 +380,11 @@
         <div class="header">
             <h1>📈 基金估值查询</h1>
             <p>输入基金代码，查询实时估值和历史净值</p>
+            <div style="margin-top:10px;font-size:0.95rem;">
+                👤 <span id="usernameDisplay"></span>
+                &nbsp;|&nbsp;
+                <a href="#" onclick="logout()" style="color:rgba(255,255,255,0.85);text-decoration:underline;">退出登录</a>
+            </div>
         </div>
         
         <div class="card">
@@ -403,11 +409,11 @@
                 
                 <div class="quote-grid">
                     <div class="quote-item">
-                        <div class="quote-label">单位净值</div>
+                        <div class="quote-label" id="dwjztime">单位净值</div>
                         <div class="quote-value" id="dwjz">-</div>
                     </div>
                     <div class="quote-item">
-                        <div class="quote-label">涨跌幅</div>
+                        <div class="quote-label" id="zdftime">涨跌幅</div>
                         <div class="quote-value" id="zzjz">-</div>
                     </div>
                     <div class="quote-item">
@@ -461,7 +467,34 @@
         let currentPeriod = 250;
         let chart = null;
         let currentFundCode = '';
-        
+
+        // JWT 辅助函数
+        function getToken() { return localStorage.getItem('jwtToken'); }
+        function authHeaders() {
+            const t = getToken();
+            return t ? { 'Authorization': 'Bearer ' + t } : {};
+        }
+        async function authFetch(url, opts = {}) {
+            opts.headers = Object.assign({}, opts.headers || {}, authHeaders());
+            const res = await fetch(url, opts);
+            if (res.status === 401) { window.location.href = '/login'; throw new Error('未登录'); }
+            return res;
+        }
+
+        // 退出登录
+        function logout() {
+            localStorage.removeItem('jwtToken');
+            localStorage.removeItem('username');
+            localStorage.removeItem('userId');
+            window.location.href = '/login';
+        }
+
+        // 页面加载时检查登录
+        document.addEventListener('DOMContentLoaded', function() {
+            if (!getToken()) { window.location.href = '/login'; return; }
+            const uname = localStorage.getItem('username');
+            if (uname) document.getElementById('usernameDisplay').textContent = uname;
+        });
         // 初始化图表
         function initChart() {
             const chartDom = document.getElementById('chart');
@@ -622,7 +655,8 @@
         
         async function searchFunds(keyword) {
             try {
-                const res = await fetch('/api/fund/search?keyword=' + encodeURIComponent(keyword));
+                //const res = await fetch('/api/fund/search?keyword=' + encodeURIComponent(keyword));
+                const res = await authFetch('/api/fund/search?keyword=' + encodeURIComponent(keyword));
                 return await res.json();
             } catch (e) {
                 console.error('搜索失败', e);
@@ -681,18 +715,20 @@
             
             try {
                 // 获取实时估值
-                const quoteRes = await fetch('/api/fund/quote?fundCode=' + fundCode);
+                // const quoteRes = await fetch('/api/fund/quote?fundCode=' + fundCode);
+                const quoteRes = await authFetch('/api/fund/quote?fundCode=' + fundCode);
                 const quoteData = await quoteRes.json();
                 
                 if (!quoteData.success) {
-                    showError(quoteData.message || '未找到该基金');
+                    showError('基金信息查询失败，请检查基金代码是否正确未找到该基金');
                     return;
                 }
                 
                 displayQuote(quoteData);
                 
                 // 获取历史数据（根据当前选择的时间周期）
-                const historyRes = await fetch('/api/fund/history?fundCode=' + fundCode + '&days=' + currentPeriod);
+                // const historyRes = await fetch('/api/fund/history?fundCode=' + fundCode + '&days=' + currentPeriod);
+                const historyRes = await authFetch('/api/fund/history?fundCode=' + fundCode + '&days=' + currentPeriod);
                 const history = await historyRes.json();
                 
                 historyData = history;
@@ -714,8 +750,11 @@
         function displayQuote(data) {
             document.getElementById('fundName').textContent = data.fundName || data.fundCode;
             document.getElementById('dwjz').textContent = data.dwjz || '-';
+            document.getElementById('dwjztime').textContent = '单位净值（' + data.gztime + '）';
+            document.getElementById('zdftime').textContent = '涨跌幅（' + data.gztime + '）';
             document.getElementById('code').textContent = data.fundCode;
-            
+
+
             const updateTimeEl = document.getElementById('updateTime');
             if (data.updateTime) {
                 updateTimeEl.querySelector('span').textContent = data.updateTime;
