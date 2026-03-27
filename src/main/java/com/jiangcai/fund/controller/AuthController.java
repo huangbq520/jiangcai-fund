@@ -4,7 +4,6 @@ import com.jiangcai.fund.dto.AuthResponse;
 import com.jiangcai.fund.dto.LoginRequest;
 import com.jiangcai.fund.dto.RegisterRequest;
 import com.jiangcai.fund.service.UserService;
-import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.*;
 
