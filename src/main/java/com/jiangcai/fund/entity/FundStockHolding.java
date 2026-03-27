@@ -13,7 +13,10 @@ public class FundStockHolding {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-    
+
+    @Column(name = "user_id")
+    private Long userId;
+
     @Column(name = "fund_code", length = 20, nullable = false)
     private String fundCode;
     
