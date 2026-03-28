@@ -12,7 +12,7 @@ spring:
   datasource:
     url: jdbc:mysql://localhost:3306/jiangcai_fund?useUnicode=true&characterEncoding=utf8
     username: root
-    password: 518680
+    password: 7454088
     driver-class-name: com.mysql.cj.jdbc.Driver
 
   jpa:

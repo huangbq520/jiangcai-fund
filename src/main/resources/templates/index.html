@@ -626,31 +626,19 @@
             if (searchTimeout) {
                 clearTimeout(searchTimeout);
             }
-            
-            // // 如果输入太短，隐藏建议
-            // if (keyword.length < 2) {
-            //     hideSearchSuggestions();
-            //     return;
-            // }
-            //
-            // // 如果是6位数字，不显示建议（直接查询）
-            // if (/^\d{6}$/.test(keyword)) {
-            //     hideSearchSuggestions();
-            //     return;
-            // }
-            
+
             // 防抖：300ms后执行搜索
             searchTimeout = setTimeout(async () => {
                 const results = await searchFunds(keyword);
                 showSearchSuggestions(results);
-            }, 300);
+            }, 200);
         });
         
         searchInput.addEventListener('blur', () => {
             // 延迟隐藏，以便点击建议项
             setTimeout(() => {
                 hideSearchSuggestions();
-            }, 200);
+            }, 500);
         });
         
         async function searchFunds(keyword) {
@@ -793,7 +781,7 @@
             // API返回的数据是升序（早→晚），直接使用
             const chartData = historyData;
             
-            const dates = chartData.map(d => d.date);
+            const dates = chartData.map(d => d.dateFull);
             // 使用累计涨跌幅
             const values = chartData.map(d => d.accumulatedChangeRate || 0);
             // 获取每日涨跌幅用于tooltip
@@ -842,6 +830,23 @@
                     top: '10%',
                     containLabel: true
                 },
+                // xAxis: {
+                //     type: 'category',
+                //     data: dates,
+                //     boundaryGap: false,
+                //     axisLine: {
+                //         lineStyle: {
+                //             color: '#e5e7eb'
+                //         }
+                //     },
+                //     axisLabel: {
+                //         color: '#6b7280',
+                //         fontSize: 11,
+                //         interval: labelInterval,
+                //         rotate: 0
+                //     }
+                // },
+
                 xAxis: {
                     type: 'category',
                     data: dates,
@@ -854,10 +859,39 @@
                     axisLabel: {
                         color: '#6b7280',
                         fontSize: 11,
-                        interval: labelInterval,
-                        rotate: 0
+                        rotate: 0,
+                        // 🔥 核心逻辑：末尾必显 + 向前间隔
+                        // interval: function(index, value) {
+                        //     // 最后一个（最右侧）必须显示
+                        //     if (index === dates.length - 1) {
+                        //         return true;
+                        //     }
+                        //     // 计算间隔：确保最多显示 maxLabels 个（含最后一个）
+                        //     const maxLabels = 8;
+                        //     const step = Math.max(1, Math.floor((dates.length - 1) / (maxLabels - 1)));
+                        //     // 从后往前，每隔 step 个显示一个
+                        //     return (dates.length - 1 - index) % step === 0;
+                        // },
+
+                        interval: function(index, value) {
+                            const total = dates.length;
+                            const showCount = 3; // 固定显示 3 个
+
+                            const middle = Math.floor(total / (showCount - 1));
+
+                            switch (index) {
+                                case 0:
+                                case middle:
+                                case total - 1:
+                                    return true;
+                                default:
+                                    return false;
+                            }
+
+                        },
                     }
                 },
+
                 yAxis: {
                     type: 'value',
                     axisLine: {
