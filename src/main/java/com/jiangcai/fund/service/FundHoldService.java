@@ -3,10 +3,12 @@ package com.jiangcai.fund.service;
 import com.jiangcai.fund.dto.PortfolioOverview;
 import com.jiangcai.fund.entity.FundStockHolding;
 import com.jiangcai.fund.repository.FundStockHoldingRepository;
+import com.jiangcai.fund.util.TradeDayUtil;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -16,10 +18,12 @@ public class FundHoldService {
     
     private final FundStockHoldingRepository repository;
     private final FundDataService fundDataService;
+    private final TradeDayUtil tradeDayUtil;
     
-    public FundHoldService(FundStockHoldingRepository repository, FundDataService fundDataService) {
+    public FundHoldService(FundStockHoldingRepository repository, FundDataService fundDataService, TradeDayUtil tradeDayUtil) {
         this.repository = repository;
         this.fundDataService = fundDataService;
+        this.tradeDayUtil = tradeDayUtil;
     }
     
     /**
@@ -31,78 +35,97 @@ public class FundHoldService {
     
     /**
      * 获取持仓概览（含当日收益计算）
+     * 根据市场状态决定展示实时数据或上一交易日结算数据
      */
     public PortfolioOverview getPortfolioOverview(Long userId) {
         PortfolioOverview overview = new PortfolioOverview();
         List<FundStockHolding> holdings = repository.findByUserId(userId);
+        
+        // 获取市场状态
+        boolean isMarketOpen = tradeDayUtil.isMarketOpen();
+        overview.setMarketStatus(isMarketOpen ? "OPEN" : "CLOSED");
+        overview.setLastTradeDay(tradeDayUtil.getLastTradeDay());
         
         BigDecimal totalAssets = BigDecimal.ZERO;
         BigDecimal totalDailyReturn = BigDecimal.ZERO;
         BigDecimal totalHoldingValue = BigDecimal.ZERO;
         
         for (FundStockHolding holding : holdings) {
-            // 获取实时估值
+            // 获取基金数据
+            Map<String, Object> fundInfo = null;
+            boolean priceValid = false;
             try {
-                Map<String, Object> fundInfo = fundDataService.getFundQuote(holding.getFundCode());
-                if (Boolean.TRUE.equals(fundInfo.get("success"))) {
-                    BigDecimal currentPrice = (BigDecimal) fundInfo.get("dwjz");
-                    BigDecimal yesterdayNav = (BigDecimal) fundInfo.get("yesterdayNav");
-                    
-                    if (currentPrice != null && currentPrice.compareTo(BigDecimal.ZERO) > 0) {
-                        // 更新当前价格
-                        holding.setCurrentPrice(currentPrice);
-                        
-                        // 计算当前市值
-                        BigDecimal currentValue = holding.getHoldingAmount().multiply(currentPrice)
-                                .setScale(2, RoundingMode.HALF_UP);
-                        holding.setCurrentValue(currentValue);
-                        
-                        // 计算持有收益 = 当前市值 - 持有金额
-                        BigDecimal profitLoss = currentValue.subtract(holding.getHoldingValue())
-                                .setScale(2, RoundingMode.HALF_UP);
-                        holding.setProfitLoss(profitLoss);
-                        
-                        // 计算收益率
-                        if (holding.getHoldingValue().compareTo(BigDecimal.ZERO) > 0) {
-                            BigDecimal profitRate = profitLoss.divide(holding.getHoldingValue(), 4, RoundingMode.HALF_UP)
-                                    .multiply(new BigDecimal("100"))
-                                    .setScale(2, RoundingMode.HALF_UP);
-                            holding.setProfitRate(profitRate);
-                        }
-                        
-                        totalAssets = totalAssets.add(currentValue);
-                        totalHoldingValue = totalHoldingValue.add(holding.getHoldingValue());
-                        
-                        // 当日收益累加
-                        if (yesterdayNav != null && yesterdayNav.compareTo(BigDecimal.ZERO) > 0) {
-                            BigDecimal dailyRet = holding.getHoldingAmount()
-                                    .multiply(currentPrice.subtract(yesterdayNav))
-                                    .setScale(2, RoundingMode.HALF_UP);
-                            totalDailyReturn = totalDailyReturn.add(dailyRet);
-                        }
-                        
-                        repository.save(holding);
-                    }
+                fundInfo = fundDataService.getFundQuote(holding.getFundCode());
+                if (Boolean.TRUE.equals(fundInfo.get("success")) && fundInfo.get("dwjz") != null) {
+                    priceValid = true;
                 }
             } catch (Exception e) {
                 // 静默处理
+            }
+            
+            if (priceValid && fundInfo != null) {
+                BigDecimal currentPrice = (BigDecimal) fundInfo.get("dwjz");
+                BigDecimal yesterdayNav = (BigDecimal) fundInfo.get("yesterdayNav");
+                
+                if (currentPrice != null && currentPrice.compareTo(BigDecimal.ZERO) > 0) {
+                    // 更新当前价格
+                    holding.setCurrentPrice(currentPrice);
+                    
+                    // 计算当前市值
+                    BigDecimal currentValue = holding.getHoldingAmount().multiply(currentPrice)
+                            .setScale(2, RoundingMode.HALF_UP);
+                    holding.setCurrentValue(currentValue);
+                    
+                    // 计算持有收益 = 当前市值 - 持有金额
+                    BigDecimal profitLoss = currentValue.subtract(holding.getHoldingValue())
+                            .setScale(2, RoundingMode.HALF_UP);
+                    holding.setProfitLoss(profitLoss);
+                    
+                    // 计算收益率
+                    if (holding.getHoldingValue().compareTo(BigDecimal.ZERO) > 0) {
+                        BigDecimal profitRate = profitLoss.divide(holding.getHoldingValue(), 4, RoundingMode.HALF_UP)
+                                .multiply(new BigDecimal("100"))
+                                .setScale(2, RoundingMode.HALF_UP);
+                        holding.setProfitRate(profitRate);
+                    }
+                    
+                    totalAssets = totalAssets.add(currentValue);
+                    totalHoldingValue = totalHoldingValue.add(holding.getHoldingValue());
+                    
+                    // 当日收益累加（仅在开盘状态且有昨日净值时计算）
+                    if (isMarketOpen && yesterdayNav != null && yesterdayNav.compareTo(BigDecimal.ZERO) > 0) {
+                        BigDecimal dailyRet = holding.getHoldingAmount()
+                                .multiply(currentPrice.subtract(yesterdayNav))
+                                .setScale(2, RoundingMode.HALF_UP);
+                        totalDailyReturn = totalDailyReturn.add(dailyRet);
+                    }
+                    
+                    repository.save(holding);
+                }
             }
         }
         
         // 设置概览数据
         overview.setTotalAssets(totalAssets);
         overview.setFundCount((int) holdings.stream().map(FundStockHolding::getFundCode).distinct().count());
-        overview.setDailyReturn(totalDailyReturn);
         
-        // 计算当日涨跌幅
-        if (totalAssets.compareTo(BigDecimal.ZERO) > 0) {
-            BigDecimal assetsMinusDaily = totalAssets.subtract(totalDailyReturn);
-            if (assetsMinusDaily.compareTo(BigDecimal.ZERO) > 0) {
-                BigDecimal dailyChangeRate = totalDailyReturn.divide(assetsMinusDaily, 4, RoundingMode.HALF_UP)
-                        .multiply(new BigDecimal("100"))
-                        .setScale(2, RoundingMode.HALF_UP);
-                overview.setDailyChangeRate(dailyChangeRate);
+        // 当日收益：休市时显示0
+        if (isMarketOpen) {
+            overview.setDailyReturn(totalDailyReturn);
+            
+            // 计算当日涨跌幅
+            if (totalAssets.compareTo(BigDecimal.ZERO) > 0) {
+                BigDecimal assetsMinusDaily = totalAssets.subtract(totalDailyReturn);
+                if (assetsMinusDaily.compareTo(BigDecimal.ZERO) > 0) {
+                    BigDecimal dailyChangeRate = totalDailyReturn.divide(assetsMinusDaily, 4, RoundingMode.HALF_UP)
+                            .multiply(new BigDecimal("100"))
+                            .setScale(2, RoundingMode.HALF_UP);
+                    overview.setDailyChangeRate(dailyChangeRate);
+                }
             }
+        } else {
+            overview.setDailyReturn(BigDecimal.ZERO);
+            overview.setDailyChangeRate(BigDecimal.ZERO);
         }
         
         // 累计收益
@@ -128,34 +151,44 @@ public class FundHoldService {
             detail.setCurrentPrice(holding.getCurrentPrice());
             detail.setCurrentValue(holding.getCurrentValue());
             
-            // 获取昨日净值
+            // 获取基金信息计算当日数据
             try {
                 Map<String, Object> fundInfo = fundDataService.getFundQuote(holding.getFundCode());
                 if (fundInfo.containsKey("yesterdayNav")) {
                     BigDecimal yesterdayNav = (BigDecimal) fundInfo.get("yesterdayNav");
+                    BigDecimal currentPrice = (BigDecimal) fundInfo.get("dwjz");
                     detail.setYesterdayNav(yesterdayNav);
                     
-                    // 当日收益
-                    BigDecimal dailyRet = holding.getHoldingAmount()
-                            .multiply(holding.getCurrentPrice().subtract(yesterdayNav))
-                            .setScale(2, RoundingMode.HALF_UP);
-                    detail.setDailyReturn(dailyRet);
+                    // 设置价格有效性
+                    detail.setPriceValid(currentPrice != null && currentPrice.compareTo(BigDecimal.ZERO) > 0);
                     
-                    // 当日涨跌幅
-                    if (yesterdayNav.compareTo(BigDecimal.ZERO) > 0) {
-                        BigDecimal dailyChg = holding.getCurrentPrice()
+                    if (isMarketOpen && currentPrice != null && yesterdayNav != null && yesterdayNav.compareTo(BigDecimal.ZERO) > 0) {
+                        // 开盘状态：计算当日收益
+                        BigDecimal dailyRet = holding.getHoldingAmount()
+                                .multiply(currentPrice.subtract(yesterdayNav))
+                                .setScale(2, RoundingMode.HALF_UP);
+                        detail.setDailyReturn(dailyRet);
+                        
+                        // 当日涨跌幅
+                        BigDecimal dailyChg = currentPrice
                                 .subtract(yesterdayNav)
                                 .divide(yesterdayNav, 4, RoundingMode.HALF_UP)
                                 .multiply(new BigDecimal("100"))
                                 .setScale(2, RoundingMode.HALF_UP);
                         detail.setDailyChangeRate(dailyChg);
+                    } else {
+                        // 休市状态：当日数据归零
+                        detail.setDailyReturn(BigDecimal.ZERO);
+                        detail.setDailyChangeRate(BigDecimal.ZERO);
                     }
+                } else {
+                    detail.setPriceValid(false);
                 }
             } catch (Exception e) {
-                // ignore
+                detail.setPriceValid(false);
             }
             
-            // 持有收益
+            // 持有收益（始终显示）
             detail.setProfitLoss(holding.getProfitLoss() != null ? holding.getProfitLoss() : BigDecimal.ZERO);
             detail.setProfitRate(holding.getProfitRate() != null ? holding.getProfitRate() : BigDecimal.ZERO);
             
@@ -224,7 +257,6 @@ public class FundHoldService {
             // 计算新的持有份额和成本价
             BigDecimal oldShares = holding.getHoldingAmount();
             BigDecimal newShares = amount.divide(currentNav, 4, RoundingMode.HALF_UP).add(oldShares);
-            BigDecimal newCostPrice = newHoldingValue.divide(newShares, 4, RoundingMode.HALF_UP);
             
             holding.setHoldingValue(newHoldingValue);
             holding.setHoldingAmount(newShares);
@@ -244,7 +276,6 @@ public class FundHoldService {
             
             // 计算持有份额
             BigDecimal shares = amount.divide(currentNav, 4, RoundingMode.HALF_UP);
-            BigDecimal costPrice = currentNav; // 首次购买，成本价=当前净值
             
             holding.setHoldingAmount(shares);
             holding.setHoldingValue(amount);
@@ -261,8 +292,6 @@ public class FundHoldService {
                     holding.setProfitRate(profitRate);
                 }
             } else {
-                // 自动计算：收益 = 持有金额 - 持有份额 × 成本价 = 持有金额 - 持有金额 = 0
-                // 因为首次购买时，持有金额 = 持有份额 × 当前净值，所以收益为0
                 holding.setProfitLoss(BigDecimal.ZERO);
                 holding.setProfitRate(BigDecimal.ZERO);
             }
@@ -363,7 +392,6 @@ public class FundHoldService {
                     BigDecimal currentPrice = (BigDecimal) fundInfo.get("dwjz");
                     if (currentPrice != null && currentPrice.compareTo(BigDecimal.ZERO) > 0) {
                         holding.setCurrentPrice(currentPrice);
-                        // 当前市值使用持有份额计算
                         holding.setCurrentValue(holding.getHoldingAmount().multiply(currentPrice).setScale(2, RoundingMode.HALF_UP));
                         calculateProfitLoss(holding);
                         repository.save(holding);

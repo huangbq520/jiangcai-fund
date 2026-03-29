@@ -40,6 +40,23 @@
             font-size: 1.1rem;
         }
         
+        .market-status {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            margin-left: 10px;
+            vertical-align: middle;
+        }
+        
+        .market-status.open {
+            background: rgba(255,255,255,0.3);
+        }
+        
+        .market-status.closed {
+            background: rgba(0,0,0,0.2);
+        }
+        
         .card {
             background: white;
             border-radius: 16px;
@@ -55,6 +72,15 @@
             margin-bottom: 20px;
             padding-bottom: 15px;
             border-bottom: 1px solid #eee;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        
+        .card-title .date-badge {
+            font-size: 0.75rem;
+            color: #666;
+            font-weight: normal;
         }
         
         /* 持仓概览卡片 */
@@ -182,7 +208,7 @@
         .holdings-table {
             width: 100%;
             border-collapse: collapse;
-            min-width: 900px;
+            min-width: 800px;
         }
         
         .holdings-table th,
@@ -196,8 +222,19 @@
             background: #f8f9fa;
             font-weight: 600;
             color: #333;
-            font-size: 0.85rem;
+            font-size: 0.8rem;
             white-space: nowrap;
+        }
+        
+        .holdings-table th .col-name {
+            display: block;
+            margin-bottom: 2px;
+        }
+        
+        .holdings-table th .col-date {
+            font-size: 0.7rem;
+            color: #999;
+            font-weight: normal;
         }
         
         .holdings-table td {
@@ -433,15 +470,47 @@
             justify-content: center;
         }
 
+        /* 实时更新指示器 */
+        .live-indicator {
+            display: inline-flex;
+            align-items: center;
+            font-size: 0.75rem;
+            color: #666;
+            margin-left: 10px;
+        }
+
+        .live-dot {
+            width: 8px;
+            height: 8px;
+            background: #27ae60;
+            border-radius: 50%;
+            margin-right: 5px;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .connection-status {
+            font-size: 0.75rem;
+            color: #999;
+            margin-left: 10px;
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
             <h1>💼 基金持仓管理</h1>
-            <p>手动录入 · 实时估值 · 收益分析</p>
+            <p>手动录入 · 实时估值 · 收益分析<span id="marketStatusBadge" class="market-status closed">休市</span></p>
             <div style="margin-top:10px;font-size:0.95rem;">
                 👤 <span id="usernameDisplay"></span>
+                <span id="liveIndicator" class="live-indicator" style="display:none;">
+                    <span class="live-dot"></span>实时更新中
+                </span>
+                <span id="connectionStatus" class="connection-status"></span>
                 &nbsp;|&nbsp;
                 <a href="#" onclick="logout()" style="color:rgba(255,255,255,0.85);text-decoration:underline;">退出登录</a>
             </div>
@@ -449,7 +518,10 @@
         
         <!-- 持仓概览 -->
         <div class="card">
-            <div class="card-title">💰 持仓概览</div>
+            <div class="card-title">
+                💰 持仓概览
+                <span class="date-badge" id="lastTradeDayBadge"></span>
+            </div>
             <div class="overview-grid">
                 <div class="overview-card">
                     <div class="overview-label">账户总资产</div>
@@ -498,14 +570,16 @@
         
         <!-- 持仓明细 -->
         <div class="card">
-            <div class="card-title">📋 持仓明细</div>
+            <div class="card-title">
+                📋 持仓明细
+                <button class="btn btn-primary btn-sm" onclick="loadPortfolioOverview()">🔄 刷新净值</button>
+            </div>
             <div class="refresh-btn">
                 <div class="sort-btns">
                     <button class="sort-btn active" onclick="sortBy('positionRatio')">按持仓占比</button>
                     <button class="sort-btn" onclick="sortBy('dailyReturn')">按当日收益</button>
                     <button class="sort-btn" onclick="sortBy('profitLoss')">按持有收益</button>
                 </div>
-                <button class="btn btn-primary btn-sm" onclick="loadPortfolioOverview()">🔄 刷新净值</button>
             </div>
             
             <div class="table-container">
@@ -514,11 +588,20 @@
                         <tr>
                             <th>基金代码</th>
                             <th>基金名称</th>
-                            <th>持有份额</th>
                             <th>当前净值</th>
                             <th>持有金额</th>
-                            <th>当日收益</th>
-                            <th>持有收益</th>
+                            <th>
+                                <span class="col-name">当日收益</span>
+                                <span class="col-date" id="dailyReturnDate"></span>
+                            </th>
+                            <th>
+                                <span class="col-name">当日涨幅</span>
+                                <span class="col-date" id="dailyChangeDate"></span>
+                            </th>
+                            <th>
+                                <span class="col-name">持有收益</span>
+                                <span class="col-date">累计</span>
+                            </th>
                             <th>持仓占比</th>
                             <th>操作</th>
                         </tr>
@@ -557,6 +640,9 @@
         let portfolioData = null;
         let currentSort = { field: 'positionRatio', desc: true };
         let pendingDeleteFundCode = null;
+        let ws = null;
+        let reconnectAttempts = 0;
+        const maxReconnectAttempts = 5;
 
         // JWT 辅助函数
         function getToken() { return localStorage.getItem('jwtToken'); }
@@ -581,6 +667,9 @@
             
             // 绑定确认删除按钮
             document.getElementById('confirmDeleteBtn').addEventListener('click', confirmDelete);
+            
+            // 初始化 WebSocket 连接
+            initWebSocket();
         });
 
         // 退出登录
@@ -589,6 +678,91 @@
             localStorage.removeItem('username');
             localStorage.removeItem('userId');
             window.location.href = '/login';
+        }
+
+        // WebSocket 连接
+        function initWebSocket() {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = protocol + '//' + window.location.host + '/ws/fund-price';
+            
+            try {
+                ws = new WebSocket(wsUrl);
+                
+                ws.onopen = function() {
+                    console.log('WebSocket 连接已建立');
+                    document.getElementById('connectionStatus').textContent = '已连接';
+                    reconnectAttempts = 0;
+                    
+                    // 发送订阅消息
+                    if (portfolioData && portfolioData.holdings) {
+                        const fundCodes = portfolioData.holdings.map(h => h.fundCode);
+                        ws.send(JSON.stringify({ action: 'subscribe', fundCodes: fundCodes }));
+                    }
+                };
+                
+                ws.onmessage = function(event) {
+                    try {
+                        const data = JSON.parse(event.data);
+                        handleWebSocketMessage(data);
+                    } catch (e) {
+                        console.error('解析 WebSocket 消息失败', e);
+                    }
+                };
+                
+                ws.onclose = function() {
+                    console.log('WebSocket 连接已关闭');
+                    document.getElementById('connectionStatus').textContent = '连接已断开';
+                    document.getElementById('liveIndicator').style.display = 'none';
+                    
+                    // 尝试重新连接
+                    if (reconnectAttempts < maxReconnectAttempts) {
+                        reconnectAttempts++;
+                        setTimeout(initWebSocket, 3000);
+                    }
+                };
+                
+                ws.onerror = function(error) {
+                    console.error('WebSocket 错误', error);
+                    document.getElementById('connectionStatus').textContent = '连接错误';
+                };
+            } catch (e) {
+                console.error('创建 WebSocket 连接失败', e);
+            }
+        }
+        
+        // 处理 WebSocket 消息
+        function handleWebSocketMessage(data) {
+            if (data.type === 'status') {
+                // 更新市场状态
+                const isOpen = data.marketStatus === 'OPEN';
+                const statusBadge = document.getElementById('marketStatusBadge');
+                statusBadge.textContent = isOpen ? '开盘' : '休市';
+                statusBadge.className = 'market-status ' + (isOpen ? 'open' : 'closed');
+                
+                // 显示实时指示器
+                if (isOpen) {
+                    document.getElementById('liveIndicator').style.display = 'inline-flex';
+                } else {
+                    document.getElementById('liveIndicator').style.display = 'none';
+                }
+                
+                // 更新日期标签
+                if (data.lastTradeDay) {
+                    const date = new Date(data.lastTradeDay);
+                    const monthDay = (date.getMonth() + 1).toString().padStart(2, '0') + '-' + date.getDate().toString().padStart(2, '0');
+                    document.getElementById('lastTradeDayBadge').textContent = '上一交易日: ' + monthDay;
+                }
+                
+                // 如果市场状态变化，刷新数据
+                if (portfolioData && portfolioData.marketStatus !== data.marketStatus) {
+                    loadPortfolioOverview();
+                }
+            } else if (data.type === 'prices') {
+                // 基金价格更新，刷新数据
+                loadPortfolioOverview();
+            } else if (data.type === 'pong') {
+                // 心跳响应
+            }
         }
 
         // 加载持仓概览数据
@@ -601,12 +775,48 @@
                     portfolioData = data.data;
                     updateOverviewCards(data.data);
                     updateHoldingsTable(data.data.holdings || []);
+                    updateMarketStatus(data.data);
+                    
+                    // 如果 WebSocket 已连接，发送订阅
+                    if (ws && ws.readyState === WebSocket.OPEN) {
+                        const fundCodes = (data.data.holdings || []).map(h => h.fundCode);
+                        ws.send(JSON.stringify({ action: 'subscribe', fundCodes: fundCodes }));
+                    }
                 } else {
                     showToast(data.message || '加载失败', 'error');
                 }
             } catch (e) {
                 console.error('加载持仓概览失败', e);
                 showToast('加载失败: ' + e.message, 'error');
+            }
+        }
+        
+        // 更新市场状态显示
+        function updateMarketStatus(data) {
+            const isOpen = data.marketStatus === 'OPEN';
+            const statusBadge = document.getElementById('marketStatusBadge');
+            statusBadge.textContent = isOpen ? '开盘' : '休市';
+            statusBadge.className = 'market-status ' + (isOpen ? 'open' : 'closed');
+            
+            // 显示实时指示器
+            if (isOpen) {
+                document.getElementById('liveIndicator').style.display = 'inline-flex';
+            } else {
+                document.getElementById('liveIndicator').style.display = 'none';
+            }
+            
+            // 更新日期标签
+            if (data.lastTradeDay) {
+                const dateStr = data.lastTradeDay;
+                const monthDay = dateStr.substring(5); // 格式: 03-29
+                document.getElementById('lastTradeDayBadge').textContent = '上一交易日: ' + monthDay;
+                document.getElementById('dailyReturnDate').textContent = monthDay;
+                document.getElementById('dailyChangeDate').textContent = monthDay;
+            } else {
+                const now = new Date();
+                const monthDay = (now.getMonth() + 1).toString().padStart(2, '0') + '-' + now.getDate().toString().padStart(2, '0');
+                document.getElementById('dailyReturnDate').textContent = monthDay;
+                document.getElementById('dailyChangeDate').textContent = monthDay;
             }
         }
         
@@ -629,6 +839,7 @@
         // 更新持仓明细表格
         function updateHoldingsTable(holdings) {
             const tbody = document.getElementById('holdingsTable');
+            const isMarketOpen = portfolioData && portfolioData.marketStatus === 'OPEN';
             
             if (!holdings || holdings.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="9" class="empty-state">暂无持仓，请添加您的第一只基金</td></tr>';
@@ -647,26 +858,31 @@
             
             tbody.innerHTML = sorted.map(h => {
                 const dailyReturn = parseFloat(h.dailyReturn) || 0;
+                const dailyChangeRate = parseFloat(h.dailyChangeRate) || 0;
                 const profitLoss = parseFloat(h.profitLoss) || 0;
                 const profitRate = parseFloat(h.profitRate) || 0;
                 const positionRatio = parseFloat(h.positionRatio) || 0;
                 const holdingValue = parseFloat(h.holdingValue) || 0;
+                const priceValid = h.priceValid !== false;
                 
-                // 检查当日收益是否有效
-                const dailyReturnValid = dailyReturn !== 0 || h.yesterdayNav !== null;
-                const dailyReturnDisplay = dailyReturnValid ? formatCurrency(dailyReturn) : '-';
-                const dailyClass = dailyReturn > 0 ? 'profit-positive' : dailyReturn < 0 ? 'profit-negative' : '';
+                // 当日收益和涨幅显示逻辑
+                const dailyReturnDisplay = (isMarketOpen && priceValid) ? formatCurrency(dailyReturn) : '-';
+                const dailyReturnClass = dailyReturn > 0 ? 'profit-positive' : dailyReturn < 0 ? 'profit-negative' : '';
+                
+                // 当日涨幅显示
+                const dailyChangeDisplay = (isMarketOpen && priceValid && dailyChangeRate !== 0) 
+                    ? (dailyChangeRate > 0 ? '+' : '') + dailyChangeRate.toFixed(2) + '%' 
+                    : '-';
+                const dailyChangeClass = dailyChangeRate > 0 ? 'profit-positive' : dailyChangeRate < 0 ? 'profit-negative' : '';
                 
                 return `
                     <tr>
                         <td><strong>${h.fundCode || '-'}</strong></td>
                         <td>${h.fundName || '-'}</td>
-                        <td>${formatNumber(h.holdingAmount)}</td>
-                        <td>${formatNumber(h.currentPrice)}</td>
+                        <td>${priceValid ? formatNumber(h.currentPrice) : '-'}</td>
                         <td class="holding-value">¥${holdingValue.toFixed(2)}</td>
-                        <td class="${dailyClass}">
-                            ${dailyReturnDisplay}
-                        </td>
+                        <td class="${dailyReturnClass}">${dailyReturnDisplay}</td>
+                        <td class="${dailyChangeClass}">${dailyChangeDisplay}</td>
                         <td class="${profitLoss >= 0 ? 'profit-positive' : 'profit-negative'}">
                             ${formatCurrency(profitLoss)}<br>
                             <small>(${profitRate >= 0 ? '+' : ''}${profitRate.toFixed(2)}%)</small>
