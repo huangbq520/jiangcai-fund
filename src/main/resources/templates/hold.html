@@ -103,6 +103,10 @@
             margin-bottom: 20px;
         }
         
+        .form-group {
+            position: relative;
+        }
+        
         .form-group input {
             width: 100%;
             padding: 12px 15px;
@@ -122,6 +126,12 @@
             font-size: 0.85rem;
             color: #666;
             margin-bottom: 5px;
+        }
+        
+        .form-group .hint {
+            font-size: 0.75rem;
+            color: #999;
+            margin-top: 4px;
         }
         
         .btn-group {
@@ -197,6 +207,13 @@
         
         .holdings-table tr:hover {
             background: #f8f9fa;
+        }
+        
+        /* 持有金额列样式 */
+        .holding-value {
+            font-size: 1rem !important;
+            font-weight: 700;
+            color: #333 !important;
         }
         
         /* 排序按钮 */
@@ -329,8 +346,8 @@
         /* 搜索建议 */
         .search-suggestions {
             position: absolute;
-            width: calc(100% - 60px);
-            max-width: 740px;
+            width: calc(100% - 0px);
+            max-width: 360px;
             max-height: 300px;
             overflow-y: auto;
             background: white;
@@ -338,7 +355,8 @@
             border-radius: 8px;
             box-shadow: 0 4px 12px rgba(0,0,0,0.1);
             z-index: 100;
-            margin-top: -10px;
+            margin-top: 4px;
+            left: 0;
         }
 
         .suggestion-item {
@@ -372,13 +390,56 @@
             margin-left: 10px;
         }
 
+        /* 确认弹窗 */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .modal-overlay.show {
+            display: flex;
+        }
+
+        .modal {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            max-width: 400px;
+            width: 90%;
+            text-align: center;
+        }
+
+        .modal h3 {
+            margin-bottom: 15px;
+            color: #333;
+        }
+
+        .modal p {
+            color: #666;
+            margin-bottom: 25px;
+        }
+
+        .modal-buttons {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+        }
+
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h1>📊 基金持仓管理</h1>
-            <p>实时估值 · 智能持仓 · 收益分析</p>
+            <h1>💼 基金持仓管理</h1>
+            <p>手动录入 · 实时估值 · 收益分析</p>
             <div style="margin-top:10px;font-size:0.95rem;">
                 👤 <span id="usernameDisplay"></span>
                 &nbsp;|&nbsp;
@@ -409,29 +470,29 @@
             </div>
         </div>
         
-        <!-- 买入/卖出表单 -->
+        <!-- 添加/调整持仓表单 -->
         <div class="card">
-            <div class="card-title">📈 买入/卖出</div>
+            <div class="card-title">📈 添加/调整持仓</div>
             <div class="form-grid">
                 <div class="form-group">
-                    <label>基金代码（6位数字）</label>
-                    <input type="text" id="fundCode" placeholder="例如: 161039" maxlength="6">
+                    <label>基金代码（支持模糊搜索）</label>
+                    <input type="text" id="fundCode" placeholder="输入代码或名称搜索" maxlength="20">
+                    <div id="searchSuggestions" class="search-suggestions" style="display: none;"></div>
                 </div>
                 <div class="form-group">
-                    <label>买入/卖出份额</label>
-                    <input type="number" id="amount" placeholder="请输入份额" step="0.01" min="0.01">
+                    <label>持有金额（人民币，元）</label>
+                    <input type="number" id="amount" placeholder="例如: 1000.00" step="0.01" min="0.01">
+                    <div class="hint">必填，如实反映您的投资金额</div>
                 </div>
                 <div class="form-group">
-                    <label>价格（可选，默认实时估值）</label>
-                    <input type="number" id="price" placeholder="例如: 1.5234" step="0.0001">
+                    <label>持有收益（选填）</label>
+                    <input type="number" id="profitLoss" placeholder="累计收益金额，如: 158.50" step="0.01">
+                    <div class="hint">留空则自动计算，不填表示收益为0</div>
                 </div>
             </div>
-            <!-- 搜索建议列表 -->
-            <div id="searchSuggestions" class="search-suggestions" style="display: none;"></div>
             <div class="btn-group">
-                <button class="btn btn-primary" onclick="addHolding()">买入</button>
-                <button class="btn btn-danger" onclick="sellHolding()">卖出</button>
-                <button class="btn btn-secondary" onclick="clearForm()">清空</button>
+                <button class="btn btn-primary" onclick="addHolding()">💾 确认添加</button>
+                <button class="btn btn-secondary" onclick="clearForm()">🧹 清空</button>
             </div>
         </div>
         
@@ -443,9 +504,8 @@
                     <button class="sort-btn active" onclick="sortBy('positionRatio')">按持仓占比</button>
                     <button class="sort-btn" onclick="sortBy('dailyReturn')">按当日收益</button>
                     <button class="sort-btn" onclick="sortBy('profitLoss')">按持有收益</button>
-                    <button class="sort-btn" onclick="sortBy('fundCode')">按基金代码</button>
                 </div>
-                <button class="btn btn-primary btn-sm" onclick="loadPortfolioOverview()">🔄 刷新最新净值</button>
+                <button class="btn btn-primary btn-sm" onclick="loadPortfolioOverview()">🔄 刷新净值</button>
             </div>
             
             <div class="table-container">
@@ -455,10 +515,9 @@
                             <th>基金代码</th>
                             <th>基金名称</th>
                             <th>持有份额</th>
-                            <th>成本价</th>
                             <th>当前净值</th>
+                            <th>持有金额</th>
                             <th>当日收益</th>
-                            <th>当日涨跌</th>
                             <th>持有收益</th>
                             <th>持仓占比</th>
                             <th>操作</th>
@@ -466,7 +525,7 @@
                     </thead>
                     <tbody id="holdingsTable">
                         <tr>
-                            <td colspan="10" class="loading">加载中...</td>
+                            <td colspan="9" class="loading">加载中...</td>
                         </tr>
                     </tbody>
                 </table>
@@ -482,9 +541,22 @@
     
     <div id="toast" class="toast"></div>
     
+    <!-- 删除确认弹窗 -->
+    <div id="deleteModal" class="modal-overlay">
+        <div class="modal">
+            <h3>⚠️ 确认删除</h3>
+            <p>确定要删除该持仓记录吗？此操作不可撤销。</p>
+            <div class="modal-buttons">
+                <button class="btn btn-secondary" onclick="closeDeleteModal()">取消</button>
+                <button class="btn btn-danger" id="confirmDeleteBtn">确认删除</button>
+            </div>
+        </div>
+    </div>
+    
     <script>
         let portfolioData = null;
         let currentSort = { field: 'positionRatio', desc: true };
+        let pendingDeleteFundCode = null;
 
         // JWT 辅助函数
         function getToken() { return localStorage.getItem('jwtToken'); }
@@ -506,6 +578,9 @@
             const uname = localStorage.getItem('username');
             if (uname) document.getElementById('usernameDisplay').textContent = uname;
             loadPortfolioOverview();
+            
+            // 绑定确认删除按钮
+            document.getElementById('confirmDeleteBtn').addEventListener('click', confirmDelete);
         });
 
         // 退出登录
@@ -519,7 +594,6 @@
         // 加载持仓概览数据
         async function loadPortfolioOverview() {
             try {
-                // const res = await fetch('/api/hold/overview');
                 const res = await authFetch('/api/hold/overview');
                 const data = await res.json();
                 
@@ -557,7 +631,7 @@
             const tbody = document.getElementById('holdingsTable');
             
             if (!holdings || holdings.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="10" class="empty-state">暂无持仓，请先买入基金</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="9" class="empty-state">暂无持仓，请添加您的第一只基金</td></tr>';
                 return;
             }
             
@@ -573,23 +647,25 @@
             
             tbody.innerHTML = sorted.map(h => {
                 const dailyReturn = parseFloat(h.dailyReturn) || 0;
-                const dailyChangeRate = parseFloat(h.dailyChangeRate) || 0;
                 const profitLoss = parseFloat(h.profitLoss) || 0;
                 const profitRate = parseFloat(h.profitRate) || 0;
                 const positionRatio = parseFloat(h.positionRatio) || 0;
+                const holdingValue = parseFloat(h.holdingValue) || 0;
+                
+                // 检查当日收益是否有效
+                const dailyReturnValid = dailyReturn !== 0 || h.yesterdayNav !== null;
+                const dailyReturnDisplay = dailyReturnValid ? formatCurrency(dailyReturn) : '-';
+                const dailyClass = dailyReturn > 0 ? 'profit-positive' : dailyReturn < 0 ? 'profit-negative' : '';
                 
                 return `
                     <tr>
                         <td><strong>${h.fundCode || '-'}</strong></td>
                         <td>${h.fundName || '-'}</td>
                         <td>${formatNumber(h.holdingAmount)}</td>
-                        <td>${formatNumber(h.costPrice)}</td>
                         <td>${formatNumber(h.currentPrice)}</td>
-                        <td class="${dailyReturn >= 0 ? 'profit-positive' : 'profit-negative'}">
-                            ${formatCurrency(dailyReturn)}
-                        </td>
-                        <td class="${dailyChangeRate >= 0 ? 'profit-positive' : 'profit-negative'}">
-                            ${dailyChangeRate >= 0 ? '+' : ''}${dailyChangeRate.toFixed(2)}%
+                        <td class="holding-value">¥${holdingValue.toFixed(2)}</td>
+                        <td class="${dailyClass}">
+                            ${dailyReturnDisplay}
                         </td>
                         <td class="${profitLoss >= 0 ? 'profit-positive' : 'profit-negative'}">
                             ${formatCurrency(profitLoss)}<br>
@@ -602,7 +678,7 @@
                             ${positionRatio.toFixed(1)}%
                         </td>
                         <td class="action-btns">
-                            <button class="btn btn-danger btn-sm" onclick="deleteHolding('${h.fundCode}')">删除</button>
+                            <button class="btn btn-danger btn-sm" onclick="showDeleteModal('${h.fundCode}')">删除</button>
                         </td>
                     </tr>
                 `;
@@ -637,15 +713,14 @@
             const labels = {
                 'positionRatio': '持仓占比',
                 'dailyReturn': '当日收益',
-                'profitLoss': '持有收益',
-                'fundCode': '基金代码'
+                'profitLoss': '持有收益'
             };
             return labels[field] || field;
         }
         
         // 格式化货币
         function formatCurrency(num) {
-            if (num === null || num === undefined) return '¥0.00';
+            if (num === null || num === undefined || isNaN(num)) return '¥0.00';
             const value = parseFloat(num);
             const sign = value >= 0 ? '+' : '-';
             return '¥' + sign + Math.abs(value).toFixed(2);
@@ -653,7 +728,7 @@
         
         // 格式化数字
         function formatNumber(num) {
-            if (num === null || num === undefined) return '-';
+            if (num === null || num === undefined || isNaN(num)) return '-';
             return parseFloat(num).toFixed(4);
         }
         
@@ -673,11 +748,11 @@
             }, 3000);
         }
         
-        // 买入
+        // 添加/调整持仓
         async function addHolding() {
             const fundCode = document.getElementById('fundCode').value.trim();
             const amount = document.getElementById('amount').value;
-            const price = document.getElementById('price').value;
+            const profitLoss = document.getElementById('profitLoss').value;
             
             if (!fundCode) {
                 showToast('请输入基金代码', 'error');
@@ -690,71 +765,54 @@
             }
             
             if (!amount || parseFloat(amount) <= 0) {
-                showToast('请输入有效的买入份额', 'error');
+                showToast('请输入有效的持有金额', 'error');
                 return;
             }
             
             const params = new URLSearchParams();
             params.append('fundCode', fundCode);
             params.append('amount', amount);
-            if (price) params.append('price', price);
+            if (profitLoss && parseFloat(profitLoss) !== 0) {
+                params.append('profitLoss', profitLoss);
+            }
             
             try {
-                // const res = await fetch('/api/hold/add?' + params.toString(), { method: 'POST' });
                 const res = await authFetch('/api/hold/add?' + params.toString(), { method: 'POST' });
                 const data = await res.json();
                 
                 if (data.success) {
-                    showToast('买入成功', 'success');
+                    showToast(data.message || '添加成功', 'success');
                     loadPortfolioOverview();
                     clearForm();
                 } else {
-                    showToast(data.message || '买入失败', 'error');
+                    showToast(data.message || '添加失败', 'error');
                 }
             } catch (e) {
-                showToast('买入失败: ' + e.message, 'error');
+                showToast('添加失败: ' + e.message, 'error');
             }
         }
         
-        // 卖出
-        async function sellHolding() {
-            const fundCode = document.getElementById('fundCode').value.trim();
-            const amount = document.getElementById('amount').value;
-            
-            if (!fundCode || !validateFundCode(fundCode)) {
-                showToast('请输入有效的基金代码', 'error');
-                return;
-            }
-            
-            if (!amount || parseFloat(amount) <= 0) {
-                showToast('请输入有效的卖出份额', 'error');
-                return;
-            }
-            
-            try {
-                const res = await authFetch('/api/hold/sell?fundCode=' + fundCode + '&amount=' + amount, {
-                    method: 'POST'
-                });
-                const data = await res.json();
-                
-                if (data.success) {
-                    showToast('卖出成功', 'success');
-                    loadPortfolioOverview();
-                    clearForm();
-                } else {
-                    showToast(data.message || '卖出失败', 'error');
-                }
-            } catch (e) {
-                showToast('卖出失败: ' + e.message, 'error');
-            }
+        // 显示删除确认弹窗
+        function showDeleteModal(fundCode) {
+            pendingDeleteFundCode = fundCode;
+            document.getElementById('deleteModal').classList.add('show');
         }
         
-        // 删除持仓
-        async function deleteHolding(fundCode) {
-            if (!confirm('确定要删除该持仓吗？')) return;
+        // 关闭删除确认弹窗
+        function closeDeleteModal() {
+            pendingDeleteFundCode = null;
+            document.getElementById('deleteModal').classList.remove('show');
+        }
+        
+        // 确认删除
+        async function confirmDelete() {
+            if (!pendingDeleteFundCode) return;
+            
+            const fundCode = pendingDeleteFundCode;
+            closeDeleteModal();
             
             try {
-                const res = await fetch('/api/hold/delete?fundCode=' + fundCode, { method: 'POST' });
+                const res = await authFetch('/api/hold/delete?fundCode=' + fundCode, { method: 'POST' });
                 const data = await res.json();
                 
                 if (data.success) {
@@ -771,7 +829,9 @@
         function clearForm() {
             document.getElementById('fundCode').value = '';
             document.getElementById('amount').value = '';
-            document.getElementById('price').value = '';
+            document.getElementById('profitLoss').value = '';
+            hasSelectedFromSuggestions = false;
+            lastSelectedFundCode = null;
         }
 
         // 记录用户是否从搜索建议中选择了基金
@@ -796,7 +856,7 @@
                 clearTimeout(searchTimeout);
             }
 
-            // 防抖：300ms后执行搜索
+            // 防抖：200ms后执行搜索
             searchTimeout = setTimeout(async () => {
                 const results = await searchFunds(keyword);
                 showSearchSuggestions(results);
@@ -811,6 +871,7 @@
         });
 
         async function searchFunds(keyword) {
+            if (!keyword || keyword.length < 1) return [];
             try {
                 const res = await authFetch('/api/fund/search?keyword=' + encodeURIComponent(keyword));
                 return await res.json();
@@ -828,10 +889,10 @@
                 return;
             }
 
-            container.innerHTML = results.slice(0, 999).map(fund => `
+            container.innerHTML = results.slice(0, 10).map(fund => `
                 <div class="suggestion-item" onclick="selectFund('${fund.fundCode}')">
                     <span class="fund-code">${fund.fundCode}</span>
-                    <span class="fund-name">${fund.fundName}</span>
+                    <span class="fund-name">${fund.fundName || ''}</span>
                     <span class="fund-type">${fund.type || ''}</span>
                 </div>
             `).join('');
@@ -849,17 +910,10 @@
             hasSelectedFromSuggestions = true;
             lastSelectedFundCode = fundCode;
 
-            // 显示选中的基金名称
-            const results = await searchFunds(fundCode);
-            if (results && results.length > 0) {
-                const fund = results.find(f => f.fundCode === fundCode);
-                if (fund) {
-                    document.getElementById('fundCode').value = fund.fundCode;
-                }
-            }
+            // 显示选中的基金代码
+            document.getElementById('fundCode').value = fundCode;
 
             hideSearchSuggestions();
-            currentFundCode = fundCode;
         };
 
     </script>

@@ -77,32 +77,23 @@ public class FundHoldController {
     }
     
     /**
-     * 添加持仓（买入）
+     * 添加/调整持仓
+     * @param fundCode 基金代码
+     * @param amount 持有金额（人民币，单位元）
+     * @param profitLoss 手动录入的持有收益（可选）
      */
     @PostMapping("/add")
     @ResponseBody
     public Map<String, Object> addHolding(
             @RequestParam String fundCode,
             @RequestParam BigDecimal amount,
-            @RequestParam(required = false) BigDecimal price,
+            @RequestParam(required = false) BigDecimal profitLoss,
             @AuthenticationPrincipal UserPrincipal principal) {
-        return fundHoldService.addHolding(fundCode, amount, price, principal.getUserId());
+        return fundHoldService.addHolding(fundCode, amount, profitLoss, principal.getUserId());
     }
     
     /**
-     * 卖出持仓
-     */
-    @PostMapping("/sell")
-    @ResponseBody
-    public Map<String, Object> sellHolding(
-            @RequestParam String fundCode,
-            @RequestParam BigDecimal amount,
-            @AuthenticationPrincipal UserPrincipal principal) {
-        return fundHoldService.sellHolding(fundCode, amount, principal.getUserId());
-    }
-    
-    /**
-     * 删除持仓
+     * 删除持仓（全部删除）
      */
     @PostMapping("/delete")
     @ResponseBody
@@ -113,7 +104,7 @@ public class FundHoldController {
         try {
             Long userId = principal.getUserId();
             fundHoldService.getHoldingByFundCode(fundCode, userId).ifPresent(holding -> {
-                fundHoldService.sellHolding(fundCode, holding.getHoldingAmount(), userId);
+                fundHoldService.sellHolding(fundCode, holding.getHoldingValue(), userId);
             });
             result.put("success", true);
             result.put("message", "删除成功");
