@@ -32,12 +32,18 @@ public class PortfolioOverview {
         private Long id;
         private String fundCode;
         private String fundName;
+        
+        /** 持有份额（基金单位） */
         private BigDecimal holdingAmount;
-        private BigDecimal costPrice;
+        
+        /** 持有金额（投资人民币，单位元） */
+        private BigDecimal holdingValue;
+        
+        /** 当前净值 */
         private BigDecimal currentPrice;
+        
         private BigDecimal yesterdayNav; // 昨日净值
         private BigDecimal currentValue;
-        private BigDecimal totalCost;
         
         // 当日收益相关
         private BigDecimal dailyReturn = BigDecimal.ZERO;  // 当日收益金额

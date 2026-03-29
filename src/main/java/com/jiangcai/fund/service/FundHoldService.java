@@ -28,6 +28,7 @@ public class FundHoldService {
     public List<FundStockHolding> getAllHoldings(Long userId) {
         return repository.findByUserId(userId);
     }
+    
     /**
      * 获取持仓概览（含当日收益计算）
      */
@@ -37,7 +38,7 @@ public class FundHoldService {
         
         BigDecimal totalAssets = BigDecimal.ZERO;
         BigDecimal totalDailyReturn = BigDecimal.ZERO;
-        BigDecimal totalCost = BigDecimal.ZERO;
+        BigDecimal totalHoldingValue = BigDecimal.ZERO;
         
         for (FundStockHolding holding : holdings) {
             // 获取实时估值
@@ -56,23 +57,23 @@ public class FundHoldService {
                                 .setScale(2, RoundingMode.HALF_UP);
                         holding.setCurrentValue(currentValue);
                         
-                        // 计算持有收益 = 当前市值 - 总成本
-                        BigDecimal profitLoss = currentValue.subtract(holding.getTotalCost())
+                        // 计算持有收益 = 当前市值 - 持有金额
+                        BigDecimal profitLoss = currentValue.subtract(holding.getHoldingValue())
                                 .setScale(2, RoundingMode.HALF_UP);
                         holding.setProfitLoss(profitLoss);
                         
                         // 计算收益率
-                        if (holding.getTotalCost().compareTo(BigDecimal.ZERO) > 0) {
-                            BigDecimal profitRate = profitLoss.divide(holding.getTotalCost(), 4, RoundingMode.HALF_UP)
+                        if (holding.getHoldingValue().compareTo(BigDecimal.ZERO) > 0) {
+                            BigDecimal profitRate = profitLoss.divide(holding.getHoldingValue(), 4, RoundingMode.HALF_UP)
                                     .multiply(new BigDecimal("100"))
                                     .setScale(2, RoundingMode.HALF_UP);
                             holding.setProfitRate(profitRate);
                         }
                         
                         totalAssets = totalAssets.add(currentValue);
-                        totalCost = totalCost.add(holding.getTotalCost());
+                        totalHoldingValue = totalHoldingValue.add(holding.getHoldingValue());
                         
-                        // 当日收益累加（复用已获取的 fundInfo，无需重复请求）
+                        // 当日收益累加
                         if (yesterdayNav != null && yesterdayNav.compareTo(BigDecimal.ZERO) > 0) {
                             BigDecimal dailyRet = holding.getHoldingAmount()
                                     .multiply(currentPrice.subtract(yesterdayNav))
@@ -95,19 +96,21 @@ public class FundHoldService {
         
         // 计算当日涨跌幅
         if (totalAssets.compareTo(BigDecimal.ZERO) > 0) {
-            BigDecimal dailyChangeRate = totalDailyReturn.divide(
-                    totalAssets.subtract(totalDailyReturn), 4, RoundingMode.HALF_UP)
-                    .multiply(new BigDecimal("100"))
-                    .setScale(2, RoundingMode.HALF_UP);
-            overview.setDailyChangeRate(dailyChangeRate);
+            BigDecimal assetsMinusDaily = totalAssets.subtract(totalDailyReturn);
+            if (assetsMinusDaily.compareTo(BigDecimal.ZERO) > 0) {
+                BigDecimal dailyChangeRate = totalDailyReturn.divide(assetsMinusDaily, 4, RoundingMode.HALF_UP)
+                        .multiply(new BigDecimal("100"))
+                        .setScale(2, RoundingMode.HALF_UP);
+                overview.setDailyChangeRate(dailyChangeRate);
+            }
         }
         
         // 累计收益
-        BigDecimal totalProfitLoss = totalAssets.subtract(totalCost);
+        BigDecimal totalProfitLoss = totalAssets.subtract(totalHoldingValue);
         overview.setTotalProfitLoss(totalProfitLoss);
         
-        if (totalCost.compareTo(BigDecimal.ZERO) > 0) {
-            BigDecimal totalProfitRate = totalProfitLoss.divide(totalCost, 4, RoundingMode.HALF_UP)
+        if (totalHoldingValue.compareTo(BigDecimal.ZERO) > 0) {
+            BigDecimal totalProfitRate = totalProfitLoss.divide(totalHoldingValue, 4, RoundingMode.HALF_UP)
                     .multiply(new BigDecimal("100"))
                     .setScale(2, RoundingMode.HALF_UP);
             overview.setTotalProfitRate(totalProfitRate);
@@ -121,10 +124,9 @@ public class FundHoldService {
             detail.setFundCode(holding.getFundCode());
             detail.setFundName(holding.getFundName());
             detail.setHoldingAmount(holding.getHoldingAmount());
-            detail.setCostPrice(holding.getCostPrice());
+            detail.setHoldingValue(holding.getHoldingValue());
             detail.setCurrentPrice(holding.getCurrentPrice());
             detail.setCurrentValue(holding.getCurrentValue());
-            detail.setTotalCost(holding.getTotalCost());
             
             // 获取昨日净值
             try {
@@ -182,10 +184,14 @@ public class FundHoldService {
     }
     
     /**
-     * 添加或更新持仓（买入）
+     * 添加或更新持仓
+     * @param fundCode 基金代码
+     * @param amount 持有金额（人民币，单位元）
+     * @param manualProfitLoss 手动录入的持有收益（可选）
+     * @param userId 用户ID
      */
     @Transactional
-    public Map<String, Object> addHolding(String fundCode, BigDecimal amount, BigDecimal price, Long userId) {
+    public Map<String, Object> addHolding(String fundCode, BigDecimal amount, BigDecimal manualProfitLoss, Long userId) {
         Map<String, Object> result = new java.util.HashMap<>();
         
         // 获取基金信息
@@ -197,36 +203,36 @@ public class FundHoldService {
         }
         
         String fundName = (String) fundInfo.getOrDefault("fundName", fundCode);
-        BigDecimal currentPrice = (BigDecimal) fundInfo.getOrDefault("dwjz", price);
+        BigDecimal currentNav = (BigDecimal) fundInfo.getOrDefault("dwjz", BigDecimal.ZERO);
         
-        if (currentPrice == null || currentPrice.compareTo(BigDecimal.ZERO) == 0) {
-            currentPrice = price;
+        if (currentNav == null || currentNav.compareTo(BigDecimal.ZERO) == 0) {
+            result.put("success", false);
+            result.put("message", "无法获取基金净值: " + fundCode);
+            return result;
         }
-        
-        // 计算总成本
-        BigDecimal totalCost = amount.multiply(currentPrice).setScale(2, RoundingMode.HALF_UP);
         
         // 检查是否已有持仓
         Optional<FundStockHolding> existingOpt = repository.findByFundCodeAndUserId(fundCode, userId);
         
         FundStockHolding holding;
         if (existingOpt.isPresent()) {
-            // 追加持仓
+            // 追加持仓：累加持有金额
             holding = existingOpt.get();
-            BigDecimal oldAmount = holding.getHoldingAmount();
-            BigDecimal oldCost = holding.getTotalCost();
+            BigDecimal oldHoldingValue = holding.getHoldingValue();
+            BigDecimal newHoldingValue = oldHoldingValue.add(amount);
             
-            BigDecimal newAmount = oldAmount.add(amount);
-            BigDecimal newCost = oldCost.add(totalCost);
+            // 计算新的持有份额和成本价
+            BigDecimal oldShares = holding.getHoldingAmount();
+            BigDecimal newShares = amount.divide(currentNav, 4, RoundingMode.HALF_UP).add(oldShares);
+            BigDecimal newCostPrice = newHoldingValue.divide(newShares, 4, RoundingMode.HALF_UP);
             
-            // 重新计算平均成本
-            BigDecimal avgCost = newCost.divide(newAmount, 4, RoundingMode.HALF_UP);
+            holding.setHoldingValue(newHoldingValue);
+            holding.setHoldingAmount(newShares);
+            holding.setCurrentPrice(currentNav);
+            holding.setCurrentValue(newHoldingValue); // 简化：当前市值=持有金额
             
-            holding.setHoldingAmount(newAmount);
-            holding.setCostPrice(avgCost);
-            holding.setTotalCost(newCost);
-            holding.setCurrentPrice(currentPrice);
-            holding.setCurrentValue(newAmount.multiply(currentPrice));
+            // 计算持有收益
+            calculateProfitLoss(holding);
             
             result.put("message", "追加持仓成功");
         } else {
@@ -235,20 +241,36 @@ public class FundHoldService {
             holding.setUserId(userId);
             holding.setFundCode(fundCode);
             holding.setFundName(fundName);
-            holding.setHoldingAmount(amount);
-            holding.setCostPrice(currentPrice);
-            holding.setTotalCost(totalCost);
-            holding.setCurrentPrice(currentPrice);
-            holding.setCurrentValue(totalCost);
+            
+            // 计算持有份额
+            BigDecimal shares = amount.divide(currentNav, 4, RoundingMode.HALF_UP);
+            BigDecimal costPrice = currentNav; // 首次购买，成本价=当前净值
+            
+            holding.setHoldingAmount(shares);
+            holding.setHoldingValue(amount);
+            holding.setCurrentPrice(currentNav);
+            holding.setCurrentValue(amount);
+            
+            // 如果有手动录入的持有收益，使用手动值；否则自动计算
+            if (manualProfitLoss != null) {
+                holding.setProfitLoss(manualProfitLoss);
+                if (amount.compareTo(BigDecimal.ZERO) > 0) {
+                    BigDecimal profitRate = manualProfitLoss.divide(amount, 4, RoundingMode.HALF_UP)
+                            .multiply(new BigDecimal("100"))
+                            .setScale(2, RoundingMode.HALF_UP);
+                    holding.setProfitRate(profitRate);
+                }
+            } else {
+                // 自动计算：收益 = 持有金额 - 持有份额 × 成本价 = 持有金额 - 持有金额 = 0
+                // 因为首次购买时，持有金额 = 持有份额 × 当前净值，所以收益为0
+                holding.setProfitLoss(BigDecimal.ZERO);
+                holding.setProfitRate(BigDecimal.ZERO);
+            }
             
             result.put("message", "添加持仓成功");
         }
         
-        // 计算盈亏
-        calculateProfitLoss(holding);
-        
         repository.save(holding);
-        
         result.put("success", true);
         result.put("holding", holding);
         
@@ -256,7 +278,7 @@ public class FundHoldService {
     }
     
     /**
-     * 卖出持仓
+     * 卖出/删除持仓
      */
     @Transactional
     public Map<String, Object> sellHolding(String fundCode, BigDecimal amount, Long userId) {
@@ -272,41 +294,52 @@ public class FundHoldService {
         
         FundStockHolding holding = existingOpt.get();
         
-        if (holding.getHoldingAmount().compareTo(amount) < 0) {
+        // amount 为要删除的持有金额（元），不是份额
+        // 计算对应的份额
+        BigDecimal costPrice = holding.getCostPrice();
+        if (costPrice.compareTo(BigDecimal.ZERO) == 0) {
             result.put("success", false);
-            result.put("message", "持有份额不足，当前持有: " + holding.getHoldingAmount());
+            result.put("message", "成本价异常，无法计算");
+            return result;
+        }
+        
+        BigDecimal sharesToSell = amount.divide(costPrice, 4, RoundingMode.HALF_UP);
+        
+        if (holding.getHoldingAmount().compareTo(sharesToSell) < 0) {
+            result.put("success", false);
+            result.put("message", "持有金额不足，当前持有: ¥" + holding.getHoldingValue());
             return result;
         }
         
         // 获取最新净值
         Map<String, Object> fundInfo = fundDataService.getFundQuote(fundCode);
-        BigDecimal currentPrice = (BigDecimal) fundInfo.getOrDefault("dwjz", holding.getCurrentPrice());
+        BigDecimal currentNav = (BigDecimal) fundInfo.getOrDefault("dwjz", holding.getCurrentPrice());
         
-        if (currentPrice == null) {
-            currentPrice = holding.getCurrentPrice();
+        if (currentNav == null) {
+            currentNav = holding.getCurrentPrice();
         }
         
-        BigDecimal sellValue = amount.multiply(currentPrice).setScale(2, RoundingMode.HALF_UP);
-        BigDecimal costValue = amount.multiply(holding.getCostPrice()).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal sellValue = sharesToSell.multiply(currentNav).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal costValue = sharesToSell.multiply(costPrice).setScale(2, RoundingMode.HALF_UP);
         BigDecimal profitLoss = sellValue.subtract(costValue);
         
         // 更新持仓
-        BigDecimal newAmount = holding.getHoldingAmount().subtract(amount);
+        BigDecimal newShares = holding.getHoldingAmount().subtract(sharesToSell);
+        BigDecimal newHoldingValue = holding.getHoldingValue().subtract(amount);
         
-        if (newAmount.compareTo(BigDecimal.ZERO) == 0) {
+        if (newShares.compareTo(BigDecimal.ZERO) == 0 || newHoldingValue.compareTo(BigDecimal.ZERO) == 0) {
             // 全部卖出
             repository.delete(holding);
-            result.put("message", "全部卖出成功");
+            result.put("message", "删除成功");
         } else {
             // 部分卖出
-            BigDecimal newCost = holding.getTotalCost().subtract(costValue);
-            holding.setHoldingAmount(newAmount);
-            holding.setTotalCost(newCost);
-            holding.setCurrentPrice(currentPrice);
-            holding.setCurrentValue(newAmount.multiply(currentPrice));
+            holding.setHoldingAmount(newShares);
+            holding.setHoldingValue(newHoldingValue);
+            holding.setCurrentPrice(currentNav);
+            holding.setCurrentValue(newHoldingValue);
             calculateProfitLoss(holding);
             repository.save(holding);
-            result.put("message", "部分卖出成功");
+            result.put("message", "部分删除成功");
         }
         
         result.put("success", true);
@@ -330,7 +363,8 @@ public class FundHoldService {
                     BigDecimal currentPrice = (BigDecimal) fundInfo.get("dwjz");
                     if (currentPrice != null && currentPrice.compareTo(BigDecimal.ZERO) > 0) {
                         holding.setCurrentPrice(currentPrice);
-                        holding.setCurrentValue(holding.getHoldingAmount().multiply(currentPrice));
+                        // 当前市值使用持有份额计算
+                        holding.setCurrentValue(holding.getHoldingAmount().multiply(currentPrice).setScale(2, RoundingMode.HALF_UP));
                         calculateProfitLoss(holding);
                         repository.save(holding);
                     }
@@ -347,15 +381,15 @@ public class FundHoldService {
      * 计算盈亏
      */
     private void calculateProfitLoss(FundStockHolding holding) {
-        BigDecimal cost = holding.getTotalCost();
+        BigDecimal holdingValue = holding.getHoldingValue();
         BigDecimal currentValue = holding.getCurrentValue();
         
-        if (cost.compareTo(BigDecimal.ZERO) > 0) {
-            BigDecimal profitLoss = currentValue.subtract(cost);
-            BigDecimal profitRate = profitLoss.divide(cost, 4, RoundingMode.HALF_UP)
+        if (holdingValue.compareTo(BigDecimal.ZERO) > 0) {
+            BigDecimal profitLoss = currentValue.subtract(holdingValue);
+            BigDecimal profitRate = profitLoss.divide(holdingValue, 4, RoundingMode.HALF_UP)
                     .multiply(new BigDecimal("100"));
             
-            holding.setProfitLoss(profitLoss);
+            holding.setProfitLoss(profitLoss.setScale(2, RoundingMode.HALF_UP));
             holding.setProfitRate(profitRate.setScale(2, RoundingMode.HALF_UP));
         } else {
             holding.setProfitLoss(BigDecimal.ZERO);

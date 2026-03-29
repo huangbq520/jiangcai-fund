@@ -23,17 +23,16 @@ public class FundStockHolding {
     @Column(name = "fund_name", length = 100)
     private String fundName;
     
+    /** 持有份额（基金单位） */
     @Column(name = "holding_amount", precision = 18, scale = 2)
     private BigDecimal holdingAmount = BigDecimal.ZERO;
     
-    @Column(name = "cost_price", precision = 10, scale = 4)
-    private BigDecimal costPrice = BigDecimal.ZERO;
+    /** 持有金额（投资人民币，单位元） */
+    @Column(name = "holding_value", precision = 18, scale = 2)
+    private BigDecimal holdingValue = BigDecimal.ZERO;
     
     @Column(name = "current_price", precision = 10, scale = 4)
     private BigDecimal currentPrice = BigDecimal.ZERO;
-    
-    @Column(name = "total_cost", precision = 18, scale = 2)
-    private BigDecimal totalCost = BigDecimal.ZERO;
     
     @Column(name = "current_value", precision = 18, scale = 2)
     private BigDecimal currentValue = BigDecimal.ZERO;
@@ -59,5 +58,15 @@ public class FundStockHolding {
     @PreUpdate
     protected void onUpdate() {
         updateTime = LocalDateTime.now();
+    }
+    
+    /**
+     * 计算成本价 = 持有金额 / 持有份额
+     */
+    public BigDecimal getCostPrice() {
+        if (holdingAmount != null && holdingAmount.compareTo(BigDecimal.ZERO) > 0) {
+            return holdingValue.divide(holdingAmount, 4, java.math.RoundingMode.HALF_UP);
+        }
+        return BigDecimal.ZERO;
     }
 }
