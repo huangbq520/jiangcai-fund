@@ -2,6 +2,7 @@ package com.jiangcai.fund.dto;
 
 import lombok.Data;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 
 @Data
@@ -23,6 +24,12 @@ public class PortfolioOverview {
     
     /** 累计总收益率 */
     private BigDecimal totalProfitRate = BigDecimal.ZERO;
+    
+    /** 市场状态：OPEN（开盘）/ CLOSED（休市） */
+    private String marketStatus = "CLOSED";
+    
+    /** 上一交易日日期 */
+    private LocalDate lastTradeDay;
     
     /** 持仓明细列表 */
     private List<HoldingDetail> holdings;
@@ -55,5 +62,8 @@ public class PortfolioOverview {
         
         // 持仓占比
         private BigDecimal positionRatio = BigDecimal.ZERO; // 持仓占比%
+        
+        /** 净值数据是否有效（用于判断是否显示-占位） */
+        private boolean priceValid = false;
     }
 }
