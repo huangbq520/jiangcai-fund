@@ -8,11 +8,16 @@ com\fund\vo\FundHolding.class
 com\fund\service\FundSearchService.class
 com\fund\config\JwtAuthenticationFilter.class
 com\fund\config\OkHttpConfig.class
+com\fund\vo\PerformanceData.class
 com\fund\scheduler\NetValueSyncScheduler.class
+com\fund\vo\MarketIndexData.class
+com\fund\controller\MarketIndexController.class
 com\fund\entity\User.class
 com\fund\controller\AuthController.class
 com\fund\dto\LoginRequest.class
+com\fund\service\MarketIndexService.class
 com\fund\config\SecurityConfig.class
+com\fund\entity\MarketIndexConfig.class
 com\fund\controller\FundController.class
 com\fund\service\FundDataService.class
 com\fund\mapper\FundMapper.class
@@ -26,6 +31,7 @@ com\fund\config\CorsConfig.class
 com\fund\entity\UserFund.class
 com\fund\util\HttpUtil.class
 com\fund\service\AuthService.class
+com\fund\vo\CompareIndex.class
 com\fund\config\RedisConfig.class
 com\fund\util\TradingDayChecker.class
 com\fund\service\FundHoldingService.class

@@ -63,7 +63,7 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['close', 'update'])
+const emit = defineEmits(['close', 'update', 'summary-updated'])
 
 const formData = ref({
   holdShare: '',
@@ -101,6 +101,9 @@ const handleSubmit = async () => {
     if (response.code === 200) {
       alert('保存成功')
       emit('update')
+      if (response.data) {
+        emit('summary-updated', response.data)
+      }
     } else {
       alert(response.message || '保存失败')
     }

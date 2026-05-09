@@ -1,5 +1,6 @@
 package com.fund.vo;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Data;
 
 import java.util.ArrayList;
@@ -9,13 +10,18 @@ import java.util.List;
 public class FundData {
     private String fundCode;
     private String fundName;
+    @JsonProperty("dwjz")
     private String unitNetValue;
+    @JsonProperty("gsz")
     private String estimatedNetValue;
+    @JsonProperty("gszzl")
     private Double estimatedChange;
+    @JsonProperty("gztime")
     private String valuationTime;
 
     private List<FundHolding> holdings = new ArrayList<>();
     private List<FundHistoryTrend> historyTrend = new ArrayList<>();
+    private List<CompareIndex> compareIndices = new ArrayList<>();
 
     private Double yesterdayChange;
 

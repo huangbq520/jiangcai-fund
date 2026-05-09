@@ -14,8 +14,10 @@ import org.springframework.stereotype.Service;
 import javax.annotation.Resource;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -46,31 +48,48 @@ public class FundHoldingService {
         return LocalTime.now(BEIJING_ZONE).isAfter(AFTERNOON_CLOSE);
     }
 
+    private boolean isTodayProfitConfirmed(UserFund userFund) {
+        if (userFund == null || userFund.getProfitConfirmDate() == null) {
+            return false;
+        }
+        LocalDate today = LocalDate.now(BEIJING_ZONE);
+        LocalDate confirmDate = userFund.getProfitConfirmDate().toInstant()
+                .atZone(BEIJING_ZONE)
+                .toLocalDate();
+        return today.equals(confirmDate) && userFund.getProfitStatus() != null && userFund.getProfitStatus() == 1;
+    }
+
+    private void confirmTodayProfit(UserFund userFund, BigDecimal confirmedNetValue, BigDecimal confirmedProfit) {
+        if (userFund == null) {
+            return;
+        }
+        userFund.setProfitStatus(1);
+        userFund.setProfitConfirmDate(java.sql.Date.valueOf(LocalDate.now(BEIJING_ZONE)));
+        userFund.setConfirmedNetValue(confirmedNetValue);
+        userFund.setConfirmedProfit(confirmedProfit);
+        userFundMapper.confirmProfit(userFund);
+        logger.info("收益已确认: fundCode={}, netValue={}, profit={}, confirmDate={}",
+                userFund.getFundCode(), confirmedNetValue, confirmedProfit, userFund.getProfitConfirmDate());
+    }
+
     public List<FundHoldingVO> getHoldingList(Long userId) {
         List<Fund> funds = fundMapper.selectAll(userId);
         List<FundHoldingVO> holdingList = new ArrayList<>();
 
         for (Fund fund : funds) {
-            FundHoldingVO vo = convertToHoldingVO(fund);
+            FundData fundData = fundDataService.getFundData(fund.getFundCode());
+            UserFund userFund = userFundMapper.findByUserIdAndFundCode(fund.getUserId(), fund.getFundCode());
+            FundHoldingVO vo = calculateProfit(fund, fundData, userFund);
             holdingList.add(vo);
         }
 
         return holdingList;
     }
 
-    public FundHoldingVO getHoldingDetail(Long userId, String fundCode) {
-        Fund fund = fundMapper.selectByCode(fundCode, userId);
-        if (fund == null) {
-            return null;
-        }
-        return convertToHoldingVO(fund);
-    }
-
     public PortfolioSummary getPortfolioSummary(Long userId) {
         PortfolioSummary summary = new PortfolioSummary();
         summary.setTotalAsset(BigDecimal.ZERO);
         summary.setTodayProfit(BigDecimal.ZERO);
-        summary.setTodayProfitRate(BigDecimal.ZERO);
         summary.setTotalProfit(BigDecimal.ZERO);
         summary.setTotalProfitRate(BigDecimal.ZERO);
         summary.setFundCount(0);
@@ -85,6 +104,7 @@ public class FundHoldingService {
         BigDecimal totalCost = BigDecimal.ZERO;
         BigDecimal totalCurrentValue = BigDecimal.ZERO;
         BigDecimal totalTodayProfit = BigDecimal.ZERO;
+        BigDecimal totalTodayProfitConfirmed = BigDecimal.ZERO;
 
         for (Fund fund : funds) {
             FundData fundData = fundDataService.getFundData(fund.getFundCode());
@@ -110,19 +130,21 @@ public class FundHoldingService {
                 if (holding.getTodayProfit() != null) {
                     totalTodayProfit = totalTodayProfit.add(holding.getTodayProfit());
                 }
+
+                if (holding.getTodayProfitConfirmed() != null) {
+                    totalTodayProfitConfirmed = totalTodayProfitConfirmed.add(holding.getTodayProfitConfirmed());
+                }
             }
         }
 
         summary.setTotalAsset(totalCurrentValue.setScale(2, RoundingMode.HALF_UP));
         summary.setTodayProfit(totalTodayProfit.setScale(2, RoundingMode.HALF_UP));
+        summary.setTodayProfitConfirmed(totalTodayProfitConfirmed.setScale(2, RoundingMode.HALF_UP));
 
         if (totalTodayProfit.compareTo(BigDecimal.ZERO) != 0 && totalCurrentValue.compareTo(BigDecimal.ZERO) > 0) {
-            BigDecimal yesterdayValue = totalCurrentValue.subtract(totalTodayProfit);
-            if (yesterdayValue.compareTo(BigDecimal.ZERO) > 0) {
-                BigDecimal todayRate = totalTodayProfit.divide(yesterdayValue, 4, RoundingMode.HALF_UP)
-                    .multiply(BigDecimal.valueOf(100));
-                summary.setTodayProfitRate(todayRate.setScale(2, RoundingMode.HALF_UP));
-            }
+            BigDecimal todayRate = totalTodayProfit.divide(totalCurrentValue, 4, RoundingMode.HALF_UP)
+                .multiply(BigDecimal.valueOf(100));
+            summary.setTodayProfitRate(todayRate.setScale(2, RoundingMode.HALF_UP));
         }
 
         if (totalCurrentValue.compareTo(BigDecimal.ZERO) > 0 && totalCost.compareTo(BigDecimal.ZERO) > 0) {
@@ -134,37 +156,6 @@ public class FundHoldingService {
         }
 
         return summary;
-    }
-
-    private FundHoldingVO convertToHoldingVO(Fund fund) {
-        FundHoldingVO vo = new FundHoldingVO();
-        vo.setFundCode(fund.getFundCode());
-        vo.setFundName(fund.getFundName());
-        vo.setHoldShare(fund.getHoldShare());
-        vo.setHoldAmount(fund.getHoldAmount());
-        vo.setCostPrice(fund.getCostPrice());
-
-        if (fund.getBuyDate() != null) {
-            vo.setBuyDate(new java.text.SimpleDateFormat("yyyy-MM-dd").format(fund.getBuyDate()));
-        }
-
-        FundData fundData = fundDataService.getFundData(fund.getFundCode());
-        UserFund userFund = userFundMapper.findByUserIdAndFundCode(fund.getUserId(), fund.getFundCode());
-
-        vo.setUnitNetValue(fundData.getUnitNetValue());
-        vo.setEstimatedNetValue(fundData.getEstimatedNetValue());
-        vo.setEstimatedChange(fundData.getEstimatedChange());
-        vo.setValuationTime(fundData.getValuationTime());
-        vo.setYesterdayNetValue(fundData.getYesterdayNetValue());
-        vo.setYesterdayChange(fundData.getYesterdayChange());
-
-        if (userFund != null) {
-            vo.setProfitStatus(userFund.getProfitStatus());
-        }
-
-        vo.setIsPostClose(isAfterTradingClose());
-
-        return calculateProfit(fund, fundData, userFund);
     }
 
     private FundHoldingVO calculateProfit(Fund fund, FundData fundData, UserFund userFund) {
@@ -210,6 +201,46 @@ public class FundHoldingService {
         boolean postClose = isAfterTradingClose();
         vo.setIsPostClose(postClose);
 
+        boolean alreadyConfirmed = isTodayProfitConfirmed(userFund);
+
+        if (alreadyConfirmed) {
+            vo.setTodayProfitConfirmed(userFund.getConfirmedProfit() != null ?
+                    userFund.getConfirmedProfit().setScale(2, RoundingMode.HALF_UP) :
+                    BigDecimal.ZERO);
+            vo.setProfitStatus(1);
+            vo.setTodayProfit(BigDecimal.ZERO);
+            vo.setCurrentValue(BigDecimal.ZERO);
+            vo.setProfitRate(BigDecimal.ZERO);
+            vo.setProfitSource(PROFIT_SOURCE_NONE);
+            return vo;
+        }
+
+        if (postClose) {
+            String unitNetValue = fundData.getUnitNetValue();
+            if (unitNetValue != null && !unitNetValue.isEmpty() && !unitNetValue.equals("null")) {
+                vo.setCurrentNetValue(unitNetValue);
+                BigDecimal unitNetValueBD = new BigDecimal(unitNetValue);
+                BigDecimal currentValue = shareForToday.multiply(unitNetValueBD).setScale(2, RoundingMode.HALF_UP);
+
+                BigDecimal yesterdayNetValueForCalc = fundData.getYesterdayNetValue() != null ?
+                        new BigDecimal(fundData.getYesterdayNetValue()) : BigDecimal.ZERO;
+                BigDecimal todayProfit = BigDecimal.ZERO;
+                if (yesterdayNetValueForCalc.compareTo(BigDecimal.ZERO) > 0) {
+                    BigDecimal yesterdayValue = shareForToday.multiply(yesterdayNetValueForCalc).setScale(2, RoundingMode.HALF_UP);
+                    todayProfit = currentValue.subtract(yesterdayValue);
+                }
+
+                vo.setTodayProfitConfirmed(todayProfit.setScale(2, RoundingMode.HALF_UP));
+                confirmTodayProfit(userFund, unitNetValueBD, todayProfit);
+                vo.setProfitStatus(1);
+                vo.setTodayProfit(BigDecimal.ZERO);
+                vo.setCurrentValue(BigDecimal.ZERO);
+                vo.setProfitRate(BigDecimal.ZERO);
+                vo.setProfitSource(PROFIT_SOURCE_NONE);
+                return vo;
+            }
+        }
+
         String currentNetValue = determineCurrentNetValue(fundData, postClose);
         vo.setCurrentNetValue(currentNetValue);
 
@@ -240,22 +271,11 @@ public class FundHoldingService {
         BigDecimal todayProfit;
         String profitSource;
 
-        if (yesterdayNetValue != null && !yesterdayNetValue.isEmpty()) {
+        if (yesterdayNetValue != null && !yesterdayNetValue.isEmpty() && !yesterdayNetValue.equals("null")) {
             try {
                 BigDecimal yesterdayNetValueBD = new BigDecimal(yesterdayNetValue);
                 todayProfit = shareForToday.multiply(currentNetValueBD.subtract(yesterdayNetValueBD));
                 profitSource = PROFIT_SOURCE_YESTERDAY_NET_VALUE;
-
-                Double estimatedChange = fundData.getEstimatedChange();
-                if (estimatedChange != null && estimatedChange != 0) {
-                    boolean profitIsNegative = todayProfit.compareTo(BigDecimal.ZERO) < 0;
-                    boolean changeIsPositive = estimatedChange > 0;
-                    boolean changeIsNegative = estimatedChange < 0;
-                    if ((profitIsNegative && changeIsPositive) || (!profitIsNegative && changeIsNegative)) {
-                        todayProfit = calculateProfitByChangePercent(currentValue, estimatedChange);
-                        profitSource = PROFIT_SOURCE_CHANGEPCT;
-                    }
-                }
             } catch (NumberFormatException e) {
                 logger.warn("解析昨日净值失败: fundCode={}, value={}", fund.getFundCode(), yesterdayNetValue);
                 todayProfit = calculateProfitByChangePercent(currentValue, fundData.getEstimatedChange());

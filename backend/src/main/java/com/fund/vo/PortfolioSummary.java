@@ -7,6 +7,7 @@ import java.math.BigDecimal;
 public class PortfolioSummary {
     private BigDecimal totalAsset;
     private BigDecimal todayProfit;
+    private BigDecimal todayProfitConfirmed;
     private BigDecimal todayProfitRate;
     private BigDecimal totalProfit;
     private BigDecimal totalProfitRate;

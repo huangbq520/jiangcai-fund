@@ -42,6 +42,7 @@ public class NetValueSyncScheduler {
                 String yesterdayNetValue = fundData.getYesterdayNetValue();
 
                 if (unitNetValue != null && !unitNetValue.isEmpty() && !unitNetValue.equals("null")) {
+                    fund.setConfirmedNetValue(new BigDecimal(unitNetValue));
                     fund.setYesterdayNetValue(new BigDecimal(unitNetValue));
                 }
 
@@ -59,6 +60,7 @@ public class NetValueSyncScheduler {
                 fund.setYesterdayShare(yesterdayShare);
 
                 fund.setProfitStatus(1);
+                fund.setProfitConfirmDate(new java.util.Date());
                 fund.setLastSyncTime(new Date());
 
                 userFundMapper.updatePostClose(fund);
@@ -87,6 +89,9 @@ public class NetValueSyncScheduler {
                 fund.setTodayBuyShare(BigDecimal.ZERO);
                 fund.setTodaySellShare(BigDecimal.ZERO);
                 fund.setProfitStatus(0);
+                fund.setProfitConfirmDate(null);
+                fund.setConfirmedNetValue(null);
+                fund.setConfirmedProfit(null);
                 userFundMapper.updateDailyFields(fund);
                 count++;
             } catch (Exception e) {

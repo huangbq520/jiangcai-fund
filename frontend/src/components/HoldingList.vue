@@ -40,12 +40,15 @@
               <div class="fund-name">{{ holding.fundName || holding.fundCode }}</div>
             </td>
             <td class="col-code">{{ holding.fundCode }}</td>
-            <td class="col-amount">¥{{ formatNumber(holding.currentValue || holding.holdAmount) }}</td>
+            <td class="col-amount">{{ formatNumber(holding.currentValue || holding.holdAmount) }}</td>
             <td class="col-change">
               {{ holding.yesterdayNetValue || '-' }}
             </td>
-            <td class="col-estimate" :class="getChangeClass(holding.estimatedChange)">
-              {{ formatPercent(holding.estimatedChange) }}
+            <td class="col-estimate">
+              <span :class="getChangeClass(holding.estimatedChange)">
+                {{ formatPercent(holding.estimatedChange) }}
+              </span>
+              <span class="estimate-time">{{ formatEstimateTime(holding.valuationTime) }}</span>
             </td>
             <td class="col-profit" :class="getProfitClass(holding.todayProfit)">
               {{ formatProfit(holding.todayProfit) }}
@@ -124,11 +127,19 @@ const handleUpdateHolding = async () => {
 }
 
 const formatNumber = (value) => {
-  if (value === null || value === undefined) return '0.00'
-  return Number(value).toLocaleString('zh-CN', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2
-  })
+  if (value === null || value === undefined) return '¥0.00'
+  const num = Number(value)
+  if (num >= 0) {
+    return '¥' + num.toLocaleString('zh-CN', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    })
+  } else {
+    return '-' + '¥' + Math.abs(num).toLocaleString('zh-CN', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    })
+  }
 }
 
 const formatProfit = (value) => {
@@ -143,14 +154,30 @@ const formatPercent = (value) => {
   return (num >= 0 ? '+' : '') + num.toFixed(2) + '%'
 }
 
+const formatEstimateTime = (timeStr) => {
+  if (!timeStr) return ''
+  const str = String(timeStr)
+  if (str === 'null' || str === '-' || str === 'undefined') return ''
+  if (str.includes('-') && str.includes(' ')) {
+    const parts = str.split(' ')
+    if (parts.length >= 2) {
+      const dateParts = parts[0].split('-')
+      if (dateParts.length >= 3) {
+        return `${dateParts[1]}-${dateParts[2]} ${parts[1]}`
+      }
+    }
+  }
+  return str
+}
+
 const getChangeClass = (value) => {
-  if (value === null || value === undefined || Number(value) === 0) return ''
-  return Number(value) > 0 ? 'positive' : 'negative'
+  if (value === null || value === undefined || Number(value) === 0) return 'profit-zero'
+  return Number(value) > 0 ? 'profit-positive' : 'profit-negative'
 }
 
 const getProfitClass = (value) => {
-  if (value === null || value === undefined || Number(value) === 0) return ''
-  return Number(value) > 0 ? 'positive' : 'negative'
+  if (value === null || value === undefined || Number(value) === 0) return 'profit-zero'
+  return Number(value) > 0 ? 'profit-positive' : 'profit-negative'
 }
 
 onMounted(() => {
@@ -288,7 +315,17 @@ defineExpose({ refreshList })
 }
 
 .col-change,
-.col-estimate,
+.col-estimate {
+  width: 100px;
+}
+
+.col-estimate .estimate-time {
+  display: block;
+  font-size: 11px;
+  color: #999;
+  margin-top: 2px;
+}
+
 .col-rate {
   width: 100px;
 }
@@ -301,16 +338,6 @@ defineExpose({ refreshList })
 
 .col-action {
   width: 80px;
-}
-
-.positive {
-  color: #e74c3c;
-  font-weight: 500;
-}
-
-.negative {
-  color: #27ae60;
-  font-weight: 500;
 }
 
 .edit-btn {

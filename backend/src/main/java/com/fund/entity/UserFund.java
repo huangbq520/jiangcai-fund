@@ -19,6 +19,9 @@ public class UserFund {
     private BigDecimal yesterdayShare;
     private BigDecimal yesterdayNetValue;
     private Integer profitStatus;
+    private Date profitConfirmDate;
+    private BigDecimal confirmedNetValue;
+    private BigDecimal confirmedProfit;
     private Date lastSyncTime;
     private Date createTime;
     private Date updateTime;

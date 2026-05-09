@@ -3,11 +3,11 @@
     <div class="summary-card">
       <div class="summary-item">
         <span class="label">总资产</span>
-        <span class="value">¥{{ formatNumber(summary.totalAsset) }}</span>
+        <span class="value">{{ formatNumber(summary.totalAsset) }}</span>
       </div>
       <div class="summary-divider"></div>
       <div class="summary-item">
-        <span class="label">当日收益</span>
+        <span class="label">当日总收益</span>
         <span class="value" :class="getProfitClass(summary.todayProfit)">
           {{ formatProfit(summary.todayProfit) }} ({{ formatPercent(summary.todayProfitRate) }})
         </span>
@@ -54,11 +54,19 @@ const loadSummary = async () => {
 }
 
 const formatNumber = (value) => {
-  if (value === null || value === undefined) return '0.00'
-  return Number(value).toLocaleString('zh-CN', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2
-  })
+  if (value === null || value === undefined) return '¥0.00'
+  const num = Number(value)
+  if (num >= 0) {
+    return '¥' + num.toLocaleString('zh-CN', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    })
+  } else {
+    return '-' + '¥' + Math.abs(num).toLocaleString('zh-CN', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    })
+  }
 }
 
 const formatProfit = (value) => {
@@ -74,8 +82,8 @@ const formatPercent = (value) => {
 }
 
 const getProfitClass = (value) => {
-  if (value === null || value === undefined || Number(value) === 0) return ''
-  return Number(value) > 0 ? 'positive' : 'negative'
+  if (value === null || value === undefined || Number(value) === 0) return 'profit-zero'
+  return Number(value) > 0 ? 'profit-positive' : 'profit-negative'
 }
 
 const startAutoRefresh = () => {
@@ -157,13 +165,5 @@ defineExpose({
   background: linear-gradient(180deg, transparent 0%, #e0e0e0 50%, transparent 100%);
   position: relative;
   z-index: 1;
-}
-
-.positive {
-  color: #e74c3c !important;
-}
-
-.negative {
-  color: #27ae60 !important;
 }
 </style>

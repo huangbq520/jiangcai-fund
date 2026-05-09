@@ -19,6 +19,8 @@ D:\ideaProjects\fund-management-system\backend\src\main\java\com\fund\service\Ma
 D:\ideaProjects\fund-management-system\backend\src\main\java\com\fund\config\JwtAuthenticationFilter.java
 D:\ideaProjects\fund-management-system\backend\src\main\java\com\fund\scheduler\NetValueSyncScheduler.java
 D:\ideaProjects\fund-management-system\backend\src\main\java\com\fund\config\OkHttpConfig.java
+D:\ideaProjects\fund-management-system\backend\src\main\java\com\fund\vo\CompareIndex.java
+D:\ideaProjects\fund-management-system\backend\src\main\java\com\fund\vo\PerformanceData.java
 D:\ideaProjects\fund-management-system\backend\src\main\java\com\fund\vo\FundHoldingVO.java
 D:\ideaProjects\fund-management-system\backend\src\main\java\com\fund\dto\LoginRequest.java
 D:\ideaProjects\fund-management-system\backend\src\main\java\com\fund\entity\Fund.java

@@ -57,8 +57,8 @@
 
           <div class="chart-card">
             <div class="card-accent"></div>
-            <h3>近90天业绩走势</h3>
-            <div ref="chartRef" class="chart-container"></div>
+            <h3>业绩走势</h3>
+            <FundTrendChart :fundCode="fundCode" />
           </div>
 
           <div class="holdings-card">
@@ -96,8 +96,9 @@
 </template>
 
 <script setup>
-import { ref, onMounted, nextTick, watch } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import { fundApi } from '../api'
+import FundTrendChart from './FundTrendChart.vue'
 
 const props = defineProps({
   fundCode: {
@@ -111,8 +112,6 @@ const emit = defineEmits(['close'])
 const loading = ref(false)
 const error = ref('')
 const detail = ref(null)
-const chartRef = ref(null)
-let chartInstance = null
 
 const loadDetail = async () => {
   loading.value = true
@@ -122,10 +121,6 @@ const loadDetail = async () => {
     const response = await fundApi.getFundData(props.fundCode)
     if (response.code === 200 && response.data) {
       detail.value = response.data
-      await nextTick()
-      setTimeout(() => {
-        initChart()
-      }, 100)
     } else {
       error.value = response.message || '加载失败'
     }
@@ -137,156 +132,7 @@ const loadDetail = async () => {
   }
 }
 
-const initChart = () => {
-  const echartsLib = window.echarts || echarts
-
-  if (!chartRef.value) {
-    console.log('initChart: chartRef is null, retrying...')
-    setTimeout(() => initChart(), 200)
-    return
-  }
-
-  if (!echartsLib) {
-    console.log('initChart: echarts not loaded yet, retrying...')
-    setTimeout(() => initChart(), 200)
-    return
-  }
-
-  if (!detail.value || !detail.value.historyTrend) {
-    console.log('initChart: detail or historyTrend not ready')
-    return
-  }
-
-  const trendData = detail.value.historyTrend
-  if (trendData.length === 0) {
-    console.log('initChart: trendData is empty')
-    return
-  }
-
-  const dates = trendData.map(item => {
-    const timestamp = Number(item.date)
-    const date = new Date(timestamp)
-    return `${date.getMonth() + 1}-${date.getDate()}`
-  })
-
-  const values = trendData.map(item => item.netValue)
-
-  if (chartInstance) {
-    chartInstance.dispose()
-  }
-
-  chartInstance = echartsLib.init(chartRef.value)
-
-  const option = {
-    tooltip: {
-      trigger: 'axis',
-      backgroundColor: 'rgba(255, 255, 255, 0.98)',
-      borderColor: '#e8e8e8',
-      borderWidth: 1,
-      textStyle: {
-        color: '#333',
-        fontSize: 13
-      },
-      formatter: function (params) {
-        const param = params[0]
-        const date = new Date(trendData[param.dataIndex].date)
-        return `<div style="font-weight: 600;">${date.toLocaleDateString()}</div>
-                <div style="color: #667eea; margin-top: 4px;">净值: <strong>${param.value}</strong></div>`
-      }
-    },
-    grid: {
-      left: '3%',
-      right: '4%',
-      bottom: '8%',
-      top: '8%',
-      containLabel: true
-    },
-    xAxis: {
-      type: 'category',
-      boundaryGap: false,
-      data: dates,
-      axisLine: {
-        lineStyle: {
-          color: '#e8e8e8'
-        }
-      },
-      axisTick: {
-        show: false
-      },
-      axisLabel: {
-        color: '#888',
-        fontSize: 11,
-        rotate: 45,
-        interval: Math.floor(dates.length / 6)
-      }
-    },
-    yAxis: {
-      type: 'value',
-      scale: true,
-      splitLine: {
-        lineStyle: {
-          color: '#f0f0f0',
-          type: 'dashed'
-        }
-      },
-      axisLine: {
-        show: false
-      },
-      axisTick: {
-        show: false
-      },
-      axisLabel: {
-        color: '#888',
-        fontSize: 11
-      }
-    },
-    series: [{
-      name: '净值',
-      type: 'line',
-      smooth: 0.4,
-      symbol: 'circle',
-      symbolSize: 5,
-      lineStyle: {
-        color: '#667eea',
-        width: 3,
-        shadowColor: 'rgba(102, 126, 234, 0.4)',
-        shadowBlur: 10
-      },
-      itemStyle: {
-        color: '#667eea',
-        borderWidth: 2,
-        borderColor: '#fff'
-      },
-      areaStyle: {
-        color: {
-          type: 'linear',
-          x: 0,
-          y: 0,
-          x2: 0,
-          y2: 1,
-          colorStops: [
-            { offset: 0, color: 'rgba(102, 126, 234, 0.35)' },
-            { offset: 0.5, color: 'rgba(102, 126, 234, 0.15)' },
-            { offset: 1, color: 'rgba(102, 126, 234, 0.02)' }
-          ]
-        }
-      },
-      data: values
-    }]
-  }
-
-  chartInstance.setOption(option)
-
-  window.addEventListener('resize', () => {
-    chartInstance && chartInstance.resize()
-  })
-}
-
 const handleClose = () => {
-  if (chartInstance) {
-    chartInstance.dispose()
-    chartInstance = null
-  }
   emit('close')
 }
 
@@ -515,14 +361,6 @@ onMounted(() => {
 
 .negative {
   color: #27ae60 !important;
-}
-
-.chart-container {
-  width: 100%;
-  height: 320px;
-  background: white;
-  border-radius: 12px;
-  padding: 12px;
 }
 
 .holdings-table {

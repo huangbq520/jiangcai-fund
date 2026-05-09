@@ -36,3 +36,15 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: #a1a1a1;
 }
+
+.profit-positive {
+  color: #FF0000;
+}
+
+.profit-negative {
+  color: #00FF00;
+}
+
+.profit-zero {
+  color: #808080;
+}

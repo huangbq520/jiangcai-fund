@@ -11,6 +11,7 @@ import com.fund.vo.ApiResponse;
 import com.fund.vo.FundData;
 import com.fund.vo.FundHoldingVO;
 import com.fund.vo.FundSearchResult;
+import com.fund.vo.PerformanceData;
 import com.fund.vo.PortfolioSummary;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -64,6 +65,35 @@ public class FundController {
         } else {
             return ApiResponse.error("基金数据加载失败");
         }
+    }
+
+    @GetMapping("/performance")
+    public ApiResponse<PerformanceData> getPerformanceData(
+            @RequestParam("code") String code,
+            @RequestParam(value = "period", defaultValue = "6month") String period) {
+        logger.info("API: 获取基金业绩走势, code={}, period={}", code, period);
+
+        if (code == null || code.trim().isEmpty()) {
+            return ApiResponse.error("基金代码不能为空");
+        }
+
+        if (!isValidPeriod(period)) {
+            return ApiResponse.error("无效的周期参数，支持: 1month, 3month, 6month, 1year, 3year, all");
+        }
+
+        PerformanceData performanceData = fundDataService.getPerformanceData(code.trim(), period);
+
+        if (performanceData.getFundCode() != null) {
+            return ApiResponse.success(performanceData);
+        } else {
+            return ApiResponse.error("业绩数据加载失败");
+        }
+    }
+
+    private boolean isValidPeriod(String period) {
+        return "1month".equals(period) || "3month".equals(period) ||
+               "6month".equals(period) || "1year".equals(period) ||
+               "3year".equals(period) || "all".equals(period);
     }
 
     @GetMapping("/search")

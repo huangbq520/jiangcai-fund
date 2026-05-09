@@ -3,7 +3,7 @@ import { getToken } from './auth'
 
 const api = axios.create({
   baseURL: '/api',
-  timeout: 10000,
+  timeout: 30000,
   headers: {
     'Content-Type': 'application/json'
   }
@@ -40,6 +40,8 @@ export const fundApi = {
   detail: (code) => api.get(`/fund/detail?code=${code}`),
 
   getFundData: (code) => api.get(`/fund/data?code=${code}`),
+
+  getPerformanceData: (code, period) => api.get(`/fund/performance?code=${code}&period=${period}`),
 
   add: (fundCode, fundName) => api.post('/fund/add', { fundCode, fundName }),
 
