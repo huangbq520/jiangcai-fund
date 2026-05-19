@@ -42,19 +42,19 @@ const { toasts, removeToast } = useToast()
   min-width: 280px;
   max-width: 420px;
   pointer-events: auto;
-  border-left: 4px solid #667eea;
+  border-left: 4px solid #1677ff;
 }
 
 .toast-item.success {
-  border-left-color: #27ae60;
+  border-left-color: #009e5f;
 }
 
 .toast-item.error {
-  border-left-color: #e74c3c;
+  border-left-color: #e53935;
 }
 
 .toast-item.info {
-  border-left-color: #667eea;
+  border-left-color: #1677ff;
 }
 
 .toast-message {

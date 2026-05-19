@@ -22,7 +22,7 @@ let chartInstance = null
 const hasData = computed(() => holdings.value && holdings.value.length > 0)
 
 const colors = [
-  '#667eea', '#764ba2', '#f093fb', '#4facfe', '#43e97b',
+  '#1677ff', '#1677ff', '#69b1ff', '#4facfe', '#43e97b',
   '#fa709a', '#fee140', '#30cfd0', '#a8c0ff', '#8b5cf6'
 ]
 

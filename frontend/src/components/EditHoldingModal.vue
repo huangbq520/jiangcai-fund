@@ -314,12 +314,12 @@ const handleClose = () => emit('close')
 
 .quick-row { display: flex; gap: 8px; margin-bottom: 14px; }
 .quick-btn { flex: 1; padding: 8px 0; border: 1px solid #e2e8f0; background: #fff; border-radius: 8px; font-size: 13px; color: #475569; cursor: pointer; transition: all 0.15s; }
-.quick-btn:hover { border-color: #667eea; color: #667eea; background: #f8f9ff; }
+.quick-btn:hover { border-color: #1677ff; color: #1677ff; background: #f8f9ff; }
 
 .form-item { margin-bottom: 14px; }
 .form-item label { display: block; margin-bottom: 6px; font-size: 13px; color: #64748b; font-weight: 500; }
 .form-item input { width: 100%; padding: 10px 12px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 14px; box-sizing: border-box; background: #fafbfc; transition: border-color 0.2s; }
-.form-item input:focus { outline: none; border-color: #667eea; background: #fff; }
+.form-item input:focus { outline: none; border-color: #1677ff; background: #fff; }
 .hint { display: block; margin-top: 4px; font-size: 12px; color: #94a3b8; }
 
 .form-row { display: flex; gap: 10px; align-items: center; }
@@ -341,16 +341,16 @@ const handleClose = () => emit('close')
 .time-toggle { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
 .time-label { font-size: 13px; color: #64748b; font-weight: 500; margin-right: 4px; }
 .time-btn { padding: 6px 14px; border: 1px solid #e2e8f0; background: #fff; border-radius: 8px; font-size: 13px; color: #64748b; cursor: pointer; transition: all 0.15s; }
-.time-btn.active { background: #667eea; color: #fff; border-color: #667eea; }
-.time-btn:hover:not(.active) { border-color: #667eea; color: #667eea; }
+.time-btn.active { background: #1677ff; color: #fff; border-color: #1677ff; }
+.time-btn:hover:not(.active) { border-color: #1677ff; color: #1677ff; }
 
-.profit-up { color: #ef4444 !important; }
-.profit-down { color: #22c55e !important; }
+.profit-up { color: #e53935 !important; }
+.profit-down { color: #009e5f !important; }
 
 .modal-footer { display: flex; justify-content: flex-end; gap: 10px; padding: 16px 24px 20px; border-top: 1px solid #f1f5f9; }
 .cancel-btn { padding: 10px 20px; border-radius: 8px; background: #f1f5f9; color: #475569; border: none; font-size: 14px; cursor: pointer; transition: all 0.2s; }
 .cancel-btn:hover { background: #e2e8f0; }
-.submit-btn { padding: 10px 24px; border-radius: 8px; background: linear-gradient(135deg,#667eea,#764ba2); color: #fff; border: none; font-size: 14px; font-weight: 500; cursor: pointer; box-shadow: 0 2px 8px rgba(102,126,234,0.3); transition: all 0.2s; }
+.submit-btn { padding: 10px 24px; border-radius: 8px; background: linear-gradient(135deg,#1677ff,#1677ff); color: #fff; border: none; font-size: 14px; font-weight: 500; cursor: pointer; box-shadow: 0 2px 8px rgba(102,126,234,0.3); transition: all 0.2s; }
 .submit-btn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(102,126,234,0.4); }
 .submit-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 

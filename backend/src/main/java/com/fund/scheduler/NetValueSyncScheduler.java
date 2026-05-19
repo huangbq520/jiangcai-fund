@@ -63,6 +63,22 @@ public class NetValueSyncScheduler {
                 fund.setProfitConfirmDate(new java.util.Date());
                 fund.setLastSyncTime(new Date());
 
+                // 更新持仓金额为当前市值 = 昨日份额 × 单位净值
+                BigDecimal holdAmount = yesterdayShare.multiply(
+                    fund.getConfirmedNetValue() != null ? fund.getConfirmedNetValue() : BigDecimal.ZERO
+                ).setScale(2, java.math.RoundingMode.HALF_UP);
+                fund.setHoldAmount(holdAmount);
+
+                // 计算并确认当日收益 = 昨日份额 × (今日单位净值 - 昨日净值)
+                BigDecimal todayUnitNV = fund.getConfirmedNetValue();
+                BigDecimal yesterdayNV = fund.getYesterdayNetValue();
+                if (todayUnitNV != null && yesterdayNV != null
+                    && todayUnitNV.compareTo(BigDecimal.ZERO) > 0 && yesterdayNV.compareTo(BigDecimal.ZERO) > 0) {
+                    BigDecimal todayProfit = yesterdayShare.multiply(todayUnitNV.subtract(yesterdayNV))
+                        .setScale(2, java.math.RoundingMode.HALF_UP);
+                    fund.setConfirmedProfit(todayProfit);
+                }
+
                 userFundMapper.updatePostClose(fund);
                 successCount++;
                 logger.info("净值同步成功: fundCode={}, yesterdayShare={}, yesterdayNetValue={}",

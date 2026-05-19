@@ -3,14 +3,17 @@ import { getToken } from '../api/auth'
 
 const routes = [
   {
-    path: '/login',
-    component: () => import('../views/LoginView.vue'),
+    path: '/auth',
+    component: () => import('../views/AuthView.vue'),
     meta: { guest: true }
   },
   {
+    path: '/login',
+    redirect: '/auth'
+  },
+  {
     path: '/register',
-    component: () => import('../views/RegisterView.vue'),
-    meta: { guest: true }
+    redirect: '/auth'
   },
   {
     path: '/detail/:fundCode',
@@ -32,7 +35,7 @@ const router = createRouter({
 router.beforeEach((to, from, next) => {
   const token = getToken()
   if (to.meta.requiresAuth && !token) {
-    next('/login')
+    next('/auth')
   } else if (to.meta.guest && token) {
     next('/')
   } else {

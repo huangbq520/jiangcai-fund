@@ -85,6 +85,13 @@ public class FundHoldingService {
             FundData fundData = fundDataService.getFundData(fund.getFundCode());
             UserFund userFund = userFundMapper.findByUserIdAndFundCode(fund.getUserId(), fund.getFundCode());
             FundHoldingVO vo = calculateProfit(fund, fundData, userFund);
+
+            // 同步持仓金额为当前市值，确保每次查看都是最新市值
+            if (vo.getCurrentValue() != null && vo.getCurrentValue().compareTo(BigDecimal.ZERO) > 0) {
+                fund.setHoldAmount(vo.getCurrentValue());
+                userFundMapper.updateHoldAmount(fund.getFundCode(), vo.getCurrentValue());
+            }
+
             holdingList.add(vo);
         }
 

@@ -3,6 +3,7 @@ package com.fund.mapper;
 import com.fund.entity.UserFund;
 import org.apache.ibatis.annotations.*;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 @Mapper
@@ -49,6 +50,9 @@ public interface UserFundMapper {
             "confirmed_net_value = #{confirmedNetValue}, confirmed_profit = #{confirmedProfit}, update_time = NOW() " +
             "WHERE fund_code = #{fundCode}")
     int confirmProfit(UserFund userFund);
+
+    @Update("UPDATE user_fund SET hold_amount = #{holdAmount}, update_time = NOW() WHERE fund_code = #{fundCode}")
+    int updateHoldAmount(@Param("fundCode") String fundCode, @Param("holdAmount") BigDecimal holdAmount);
 
     @Delete("DELETE FROM user_fund WHERE user_id = #{userId} AND fund_code = #{fundCode}")
     int deleteByUserIdAndFundCode(@Param("userId") Long userId, @Param("fundCode") String fundCode);

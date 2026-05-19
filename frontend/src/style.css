@@ -10,7 +10,7 @@ body {
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: #f5f6f8;
   min-height: 100vh;
 }
 
@@ -38,13 +38,49 @@ body {
 }
 
 .profit-positive {
-  color: #FF0000;
+  color: #e53935;
 }
 
 .profit-negative {
-  color: #00FF00;
+  color: #009e5f;
 }
 
 .profit-zero {
-  color: #808080;
+  color: #64748b;
+}
+
+/* ===== 卡片悬停动效 ===== */
+.summary-card,
+.holding-list,
+.portfolio-summary,
+.search-fund,
+.allocation-chart,
+.market-index {
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+              box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.summary-card:hover,
+.holding-list:hover,
+.portfolio-summary:hover .summary-card,
+.search-fund:hover,
+.allocation-chart:hover,
+.market-index:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.1), 0 2px 8px rgba(0, 0, 0, 0.06) !important;
+}
+
+/* ===== 指数卡片悬停 ===== */
+.index-item {
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+
+.index-item:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+}
+
+/* ===== 表格行悬停增强 ===== */
+.table-row {
+  transition: background-color 0.15s ease, box-shadow 0.15s ease;
 }

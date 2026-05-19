@@ -62,7 +62,7 @@ useAutoRefresh(() => fundStore.silentFetchSummary(), 30000, isTradingHours)
   left: 0;
   right: 0;
   height: 4px;
-  background: linear-gradient(90deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+  background: linear-gradient(90deg, #1677ff 0%, #1677ff 50%, #69b1ff 100%);
 }
 
 .summary-item {

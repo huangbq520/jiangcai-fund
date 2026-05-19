@@ -109,11 +109,11 @@ const getIndexClass = (index) => {
 
 .index-item.up .change-value,
 .index-item.up .change-percent {
-  color: #e74c3c;
+  color: #e53935;
 }
 
 .index-item.down .change-value,
 .index-item.down .change-percent {
-  color: #27ae60;
+  color: #009e5f;
 }
 </style>

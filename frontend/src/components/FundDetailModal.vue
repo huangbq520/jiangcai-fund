@@ -8,8 +8,12 @@
 
       <div class="modal-body">
         <div v-if="loading" class="loading">
-          <div class="loading-spinner"></div>
-          <span>加载中...</span>
+          <svg viewBox="0 0 240 240" height="240" width="240" class="pl">
+            <circle stroke-linecap="round" stroke-dashoffset="-330" stroke-dasharray="0 660" stroke-width="20" stroke="#000" fill="none" r="105" cy="120" cx="120" class="pl__ring pl__ring--a"></circle>
+            <circle stroke-linecap="round" stroke-dashoffset="-110" stroke-dasharray="0 220" stroke-width="20" stroke="#000" fill="none" r="35" cy="120" cx="120" class="pl__ring pl__ring--b"></circle>
+            <circle stroke-linecap="round" stroke-dasharray="0 440" stroke-width="20" stroke="#000" fill="none" r="70" cy="120" cx="85" class="pl__ring pl__ring--c"></circle>
+            <circle stroke-linecap="round" stroke-dasharray="0 440" stroke-width="20" stroke="#000" fill="none" r="70" cy="120" cx="155" class="pl__ring pl__ring--d"></circle>
+          </svg>
         </div>
 
         <div v-else-if="error" class="error">
@@ -151,7 +155,7 @@ const holdingInfo = computed(() => {
   const h = holdings.value?.find(h => h.fundCode === props.fundCode)
   if (!h) return {}
   return {
-    holdAmount: h.holdAmount ? '¥' + Number(h.holdAmount).toLocaleString('zh-CN', { minimumFractionDigits: 2 }) : null,
+    holdAmount: (h.currentValue != null ? '¥' + Number(h.currentValue).toLocaleString('zh-CN', { minimumFractionDigits: 2 }) : h.holdAmount ? '¥' + Number(h.holdAmount).toLocaleString('zh-CN', { minimumFractionDigits: 2 }) : null),
     todayProfit: h.todayProfit != null ? (Number(h.todayProfit) >= 0 ? '+' : '') + Number(h.todayProfit).toFixed(2) : null,
     profitRate: h.profitRate != null ? (Number(h.profitRate) >= 0 ? '+' : '') + Number(h.profitRate).toFixed(2) + '%' : null
   }
@@ -272,7 +276,7 @@ onMounted(() => {
 }
 
 .close-btn:hover {
-  background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+  background: linear-gradient(135deg, #e53935 0%, #c0392b 100%);
   color: white;
   transform: scale(1.05);
 }
@@ -295,7 +299,7 @@ onMounted(() => {
   width: 40px;
   height: 40px;
   border: 3px solid #f0f0f0;
-  border-top-color: #667eea;
+  border-top-color: #1677ff;
   border-radius: 50%;
   animation: spin 1s linear infinite;
 }
@@ -310,7 +314,7 @@ onMounted(() => {
   justify-content: center;
   gap: 12px;
   padding: 40px;
-  color: #e74c3c;
+  color: #e53935;
   font-size: 15px;
   background: linear-gradient(135deg, #fff5f5 0%, #ffe8e8 100%);
   border-radius: 12px;
@@ -320,7 +324,7 @@ onMounted(() => {
 .error-icon {
   width: 28px;
   height: 28px;
-  background: #e74c3c;
+  background: #e53935;
   color: white;
   border-radius: 50%;
   display: flex;
@@ -351,7 +355,7 @@ onMounted(() => {
   left: 0;
   right: 0;
   height: 4px;
-  background: linear-gradient(90deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+  background: linear-gradient(90deg, #1677ff 0%, #1677ff 50%, #69b1ff 100%);
 }
 
 .val-time {
@@ -401,8 +405,8 @@ onMounted(() => {
 }
 
 .chart-tab.active {
-  color: #667eea;
-  border-bottom-color: #667eea;
+  color: #1677ff;
+  border-bottom-color: #1677ff;
 }
 
 .info-grid {
@@ -436,7 +440,7 @@ onMounted(() => {
 }
 
 .info-item .value.code {
-  color: #667eea;
+  color: #1677ff;
   background: rgba(102, 126, 234, 0.1);
   padding: 2px 8px;
   border-radius: 4px;
@@ -446,11 +450,11 @@ onMounted(() => {
 }
 
 .positive {
-  color: #e74c3c !important;
+  color: #e53935 !important;
 }
 
 .negative {
-  color: #27ae60 !important;
+  color: #009e5f !important;
 }
 
 .holdings-table {
@@ -511,7 +515,7 @@ onMounted(() => {
 
 .col-code {
   width: 100px;
-  color: #667eea !important;
+  color: #1677ff !important;
   font-weight: 500 !important;
 }
 
@@ -531,7 +535,7 @@ onMounted(() => {
 
 .weight-badge {
   background: linear-gradient(135deg, #f0f4ff 0%, #e8ecff 100%);
-  color: #667eea;
+  color: #1677ff;
   padding: 4px 10px;
   border-radius: 12px;
   font-size: 13px;
@@ -551,5 +555,175 @@ onMounted(() => {
 .no-data-icon {
   font-size: 40px;
   opacity: 0.7;
+}
+
+.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 50px;
+}
+
+.pl {
+  width: 6em;
+  height: 6em;
+}
+
+.pl__ring {
+  animation: ringA 2s linear infinite;
+}
+
+.pl__ring--a {
+  stroke: #f42f25;
+}
+
+.pl__ring--b {
+  animation-name: ringB;
+  stroke: #ffdd00;
+}
+
+.pl__ring--c {
+  animation-name: ringC;
+  stroke: #255ff4;
+}
+
+@keyframes ringA {
+  from,
+  4% {
+    stroke-dasharray: 0 660;
+    stroke-width: 20;
+    stroke-dashoffset: -330;
+  }
+
+  12% {
+    stroke-dasharray: 60 600;
+    stroke-width: 30;
+    stroke-dashoffset: -335;
+  }
+
+  32% {
+    stroke-dasharray: 60 600;
+    stroke-width: 30;
+    stroke-dashoffset: -595;
+  }
+
+  40%,
+  54% {
+    stroke-dasharray: 0 660;
+    stroke-width: 20;
+    stroke-dashoffset: -660;
+  }
+
+  62% {
+    stroke-dasharray: 60 600;
+    stroke-width: 30;
+    stroke-dashoffset: -665;
+  }
+
+  82% {
+    stroke-dasharray: 60 600;
+    stroke-width: 30;
+    stroke-dashoffset: -925;
+  }
+
+  90%,
+  to {
+    stroke-dasharray: 0 660;
+    stroke-width: 20;
+    stroke-dashoffset: -990;
+  }
+}
+
+@keyframes ringB {
+  from,
+  12% {
+    stroke-dasharray: 0 220;
+    stroke-width: 20;
+    stroke-dashoffset: -110;
+  }
+
+  20% {
+    stroke-dasharray: 20 200;
+    stroke-width: 30;
+    stroke-dashoffset: -115;
+  }
+
+  40% {
+    stroke-dasharray: 20 200;
+    stroke-width: 30;
+    stroke-dashoffset: -195;
+  }
+
+  48%,
+  62% {
+    stroke-dasharray: 0 220;
+    stroke-width: 20;
+    stroke-dashoffset: -220;
+  }
+
+  70% {
+    stroke-dasharray: 20 200;
+    stroke-width: 30;
+    stroke-dashoffset: -225;
+  }
+
+  90% {
+    stroke-dasharray: 20 200;
+    stroke-width: 30;
+    stroke-dashoffset: -305;
+  }
+
+  98%,
+  to {
+    stroke-dasharray: 0 220;
+    stroke-width: 20;
+    stroke-dashoffset: -330;
+  }
+}
+
+@keyframes ringC {
+  from {
+    stroke-dasharray: 0 440;
+    stroke-width: 20;
+    stroke-dashoffset: 0;
+  }
+
+  8% {
+    stroke-dasharray: 40 400;
+    stroke-width: 30;
+    stroke-dashoffset: -5;
+  }
+
+  28% {
+    stroke-dasharray: 40 400;
+    stroke-width: 30;
+    stroke-dashoffset: -175;
+  }
+
+  36%,
+  58% {
+    stroke-dasharray: 0 440;
+    stroke-width: 20;
+    stroke-dashoffset: -220;
+  }
+
+  66% {
+    stroke-dasharray: 40 400;
+    stroke-width: 30;
+    stroke-dashoffset: -225;
+  }
+
+  86% {
+    stroke-dasharray: 40 400;
+    stroke-width: 30;
+    stroke-dashoffset: -395;
+  }
+
+  94%,
+  to {
+    stroke-dasharray: 0 440;
+    stroke-width: 20;
+    stroke-dashoffset: -440;
+  }
 }
 </style>
