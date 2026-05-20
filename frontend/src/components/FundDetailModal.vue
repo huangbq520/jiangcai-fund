@@ -79,47 +79,78 @@
                 @click="chartTab = 'trend'"
               >业绩走势</button>
               <button
+                :class="['chart-tab', { active: chartTab === 'holdings' }]"
+                @click="chartTab = 'holdings'"
+              >持仓股票</button>
+              <button
                 :class="['chart-tab', { active: chartTab === 'myprofit' }]"
                 @click="chartTab = 'myprofit'"
               >我的收益</button>
             </div>
-            <FundTrendChart v-if="chartTab === 'trend'" :fundCode="fundCode" />
+            <FundTrendChart v-if="chartTab === 'trend'" :fundCode="fundCode" @load-more="openHistoryPopup" />
+            <div v-if="chartTab === 'holdings'">
+              <table v-if="detail.holdings && detail.holdings.length > 0" class="holdings-table">
+                <thead>
+                  <tr>
+                    <th class="col-index">序号</th>
+                    <th class="col-code">股票代码</th>
+                    <th class="col-name">股票名称</th>
+                    <th class="col-change">涨跌幅</th>
+                    <th class="col-weight">占比</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="(holding, index) in detail.holdings" :key="index" class="holding-row">
+                    <td class="col-index">{{ index + 1 }}</td>
+                    <td class="col-code">{{ holding.stockCode }}</td>
+                    <td class="col-name">{{ holding.stockName }}</td>
+                    <td class="col-change" :class="getChangeClassLocal(holding.change)">
+                      {{ formatChange(holding.change) }}
+                    </td>
+                    <td class="col-weight">
+                      <span class="weight-badge">{{ holding.weight }}</span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+              <div v-else class="no-data">
+                <span class="no-data-icon">📭</span>
+                <span>暂无持仓数据</span>
+              </div>
+            </div>
             <MyProfitTab v-if="chartTab === 'myprofit'" :fundCode="fundCode" />
           </div>
 
-          <div class="holdings-card">
-            <div class="card-accent"></div>
-            <h3>持仓股票 (前10)</h3>
-            <table v-if="detail.holdings && detail.holdings.length > 0" class="holdings-table">
-              <thead>
-                <tr>
-                  <th class="col-index">序号</th>
-                  <th class="col-code">股票代码</th>
-                  <th class="col-name">股票名称</th>
-                  <th class="col-change">涨跌幅</th>
-                  <th class="col-weight">占比</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="(holding, index) in detail.holdings" :key="index" class="holding-row">
-                  <td class="col-index">{{ index + 1 }}</td>
-                  <td class="col-code">{{ holding.stockCode }}</td>
-                  <td class="col-name">{{ holding.stockName }}</td>
-                  <td class="col-change" :class="getChangeClassLocal(holding.change)">
-                    {{ formatChange(holding.change) }}
-                  </td>
-                  <td class="col-weight">
-                    <span class="weight-badge">{{ holding.weight }}</span>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-            <div v-else class="no-data">
-              <span class="no-data-icon">📭</span>
-              <span>暂无持仓数据</span>
-            </div>
-          </div>
         </template>
+      </div>
+    </div>
+
+    <div v-if="showHistoryPopup" class="history-backdrop" @click.self="closeHistoryPopup">
+      <div class="history-panel">
+        <div class="history-header">
+          <h3>净值历史</h3>
+          <button @click="closeHistoryPopup" class="close-btn">×</button>
+        </div>
+        <div class="history-body">
+          <table class="history-table">
+            <thead>
+              <tr>
+                <th>日期</th>
+                <th>净值</th>
+                <th>日涨幅</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="(item, i) in historyData" :key="i">
+                <td class="col-date">{{ formatHistoryDate(item.date) }}</td>
+                <td class="col-value">{{ item.netValue != null ? item.netValue.toFixed(4) : '--' }}</td>
+                <td :class="['col-change', getHistoryChangeClass(item, i)]">
+                  {{ formatHistoryChange(item, i) }}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   </div>
@@ -150,6 +181,8 @@ const loading = ref(false)
 const error = ref('')
 const detail = ref(null)
 const chartTab = ref('trend')
+const showHistoryPopup = ref(false)
+const historyData = ref([])
 
 const holdingInfo = computed(() => {
   const h = holdings.value?.find(h => h.fundCode === props.fundCode)
@@ -187,6 +220,47 @@ const loadDetail = async () => {
 
 const handleClose = () => {
   emit('close')
+}
+
+const openHistoryPopup = (data) => {
+  historyData.value = data || []
+  showHistoryPopup.value = true
+  document.body.style.overflow = 'hidden'
+}
+
+const closeHistoryPopup = () => {
+  showHistoryPopup.value = false
+  document.body.style.overflow = ''
+}
+
+const formatHistoryDate = (timestamp) => {
+  if (!timestamp) return ''
+  if (typeof timestamp === 'string') {
+    if (timestamp.includes('-')) return timestamp
+    const n = parseInt(timestamp)
+    if (isNaN(n)) return ''
+    const d = new Date(n)
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  }
+  const d = new Date(timestamp)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+const getHistoryChangeClass = (item, i) => {
+  if (i >= historyData.value.length - 1 || !item || !historyData.value[i + 1]) return ''
+  const cur = item.netValue
+  const prev = historyData.value[i + 1]?.netValue
+  if (cur == null || prev == null || prev === 0) return ''
+  return cur >= prev ? 'positive' : 'negative'
+}
+
+const formatHistoryChange = (item, i) => {
+  if (i >= historyData.value.length - 1 || !item || !historyData.value[i + 1]) return '--'
+  const cur = item.netValue
+  const prev = historyData.value[i + 1]?.netValue
+  if (cur == null || prev == null || prev === 0) return '--'
+  const change = (cur - prev) / prev * 100
+  return (change >= 0 ? '+' : '') + change.toFixed(2) + '%'
 }
 
 const formatPercentLocal = (value) => formatPercent(value, { nullDisplay: '-' })
@@ -334,7 +408,7 @@ onMounted(() => {
   font-size: 16px;
 }
 
-.info-card, .chart-card, .holdings-card {
+.info-card, .chart-card {
   margin-bottom: 24px;
   padding: 20px 24px 24px;
   background: #fafbfc;
@@ -345,7 +419,7 @@ onMounted(() => {
   transition: box-shadow 0.3s;
 }
 
-.info-card:hover, .chart-card:hover, .holdings-card:hover {
+.info-card:hover, .chart-card:hover {
   box-shadow: 0 8px 32px rgba(102, 126, 234, 0.12);
 }
 
@@ -371,7 +445,7 @@ onMounted(() => {
   margin: 8px 0 16px;
 }
 
-.info-card h3, .chart-card h3, .holdings-card h3 {
+.info-card h3, .chart-card h3 {
   margin: 0 0 20px 0;
   font-size: 16px;
   font-weight: 600;
@@ -680,6 +754,93 @@ onMounted(() => {
     stroke-dashoffset: -330;
   }
 }
+
+/* ===== 历史净值弹窗 ===== */
+.history-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.15);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  z-index: 10000;
+  padding-top: 40px;
+  padding-bottom: 40px;
+}
+
+.history-panel {
+  background: white;
+  border-radius: 16px;
+  width: 90%;
+  max-width: 600px;
+  max-height: calc(100vh - 80px);
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.2);
+  overflow: hidden;
+}
+
+.history-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px;
+  border-bottom: 1px solid #f0f0f0;
+  flex-shrink: 0;
+}
+
+.history-header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #333;
+}
+
+.history-body {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.history-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.history-table thead {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.history-table th {
+  font-size: 12px;
+  color: #94a3b8;
+  font-weight: 500;
+  text-align: left;
+  padding: 8px 24px 8px 12px;
+  border-bottom: 2px solid #f1f5f9;
+  background: white;
+}
+
+.history-table td {
+  font-size: 14px;
+  padding: 10px 24px 10px 12px;
+  border-bottom: 1px solid #f8fafc;
+  color: #475569;
+}
+
+.history-table tbody tr:hover {
+  background: #f8f9ff;
+}
+
+.history-table .col-date { color: #64748b; }
+.history-table .col-value { font-weight: 500; font-variant-numeric: tabular-nums; }
+.history-table .col-change { font-weight: 500; text-align: right; }
+.history-table .col-change.positive { color: #e53935; }
+.history-table .col-change.negative { color: #009e5f; }
 
 @keyframes ringC {
   from {

@@ -44,6 +44,34 @@
           <span class="legend-text">{{ series.name }}</span>
         </button>
       </div>
+
+      <div v-if="currentData?.netWorthTrend?.length" class="nav-history-mini">
+        <div class="mini-header">
+          <span class="mini-title">净值历史</span>
+          <span class="mini-subtitle">最近5条</span>
+        </div>
+        <table class="mini-table">
+          <thead>
+            <tr>
+              <th>日期</th>
+              <th>净值</th>
+              <th>日涨幅</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="item in recentNavList" :key="item.date">
+              <td class="col-date">{{ formatDate(item.date) }}</td>
+              <td class="col-value">{{ item.netValue != null ? item.netValue.toFixed(4) : '--' }}</td>
+              <td :class="['col-change', item.change >= 0 ? 'positive' : 'negative']">
+                {{ item.change != null ? (item.change >= 0 ? '+' : '') + item.change.toFixed(2) + '%' : '--' }}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <button class="load-more-btn" @click="$emit('load-more', [...currentData.netWorthTrend].reverse())">
+          加载更多历史数据
+        </button>
+      </div>
     </div>
   </div>
 </template>
@@ -57,6 +85,8 @@ const echartsLib = window.echarts
 const props = defineProps({
   fundCode: { type: String, required: true }
 })
+
+const emit = defineEmits(['load-more'])
 
 const chartRef = ref(null)
 const chartInstance = ref(null)
@@ -99,6 +129,21 @@ const formattedReturn = computed(() => {
   if (!currentData.value || currentData.value.periodReturn == null) return '--'
   const value = currentData.value.periodReturn
   return `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`
+})
+
+const recentNavList = computed(() => {
+  const trend = currentData.value?.netWorthTrend
+  if (!trend?.length) return []
+  const reversed = [...trend].reverse()
+  const latest = reversed.slice(0, 5)
+  return latest.map((item, i) => {
+    const prev = reversed[i + 1]
+    let change = null
+    if (item.netValue != null && prev?.netValue != null && prev.netValue !== 0) {
+      change = (item.netValue - prev.netValue) / prev.netValue * 100
+    }
+    return { date: item.date, netValue: item.netValue, change }
+  })
 })
 
 const returnClass = computed(() => {
@@ -758,6 +803,78 @@ onUnmounted(() => {
 .legend-line { width: 20px; height: 3px; border-radius: 2px; }
 
 .legend-text { font-size: 12px; color: #475569; font-weight: 500; }
+
+/* ===== 净值历史小列表 ===== */
+.nav-history-mini {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid #f1f5f9;
+}
+
+.mini-header {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.mini-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #475569;
+}
+
+.mini-subtitle {
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.mini-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.mini-table th {
+  font-size: 11px;
+  color: #94a3b8;
+  font-weight: 500;
+  text-align: left;
+  padding: 6px 8px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.mini-table td {
+  font-size: 13px;
+  padding: 7px 8px;
+  border-bottom: 1px solid #f8fafc;
+  color: #475569;
+}
+
+.col-date { color: #64748b !important; }
+.col-value { font-weight: 500; font-variant-numeric: tabular-nums; }
+.col-change { font-weight: 500; text-align: right !important; }
+.col-change.positive { color: #e53935; }
+.col-change.negative { color: #009e5f; }
+
+.load-more-btn {
+  display: block;
+  width: 100%;
+  margin-top: 10px;
+  padding: 10px 0;
+  border: 1px dashed #d0d5dd;
+  border-radius: 8px;
+  background: #fafbfc;
+  color: #64748b;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.load-more-btn:hover {
+  border-color: #1677ff;
+  color: #1677ff;
+  background: #f0f5ff;
+}
 
 .chart-loading {
   display: flex;
