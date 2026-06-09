@@ -1,6 +1,5 @@
 <template>
   <div class="allocation-chart">
-    <h3>资产配置</h3>
     <div v-if="!hasData" class="empty-state">暂无持仓数据</div>
     <div v-else ref="chartRef" class="chart-canvas"></div>
   </div>
@@ -131,18 +130,7 @@ onUnmounted(() => {
 
 <style scoped>
 .allocation-chart {
-  background: white;
-  border-radius: 16px;
-  padding: 24px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
-  margin-top: 16px;
-}
-
-.allocation-chart h3 {
-  margin: 0 0 16px 0;
-  font-size: 18px;
-  font-weight: 600;
-  color: #333;
+  padding: 0 24px;
 }
 
 .chart-canvas {
