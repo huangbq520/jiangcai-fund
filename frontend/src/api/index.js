@@ -63,11 +63,17 @@ export const fundApi = {
 
   getPerformanceData: (code, period) => api.get(`/fund/performance?code=${code}&period=${period}`),
 
-  add: (fundCode, fundName) => api.post('/fund/add', { fundCode, fundName }),
+  add: (fundCode, fundName, groupId) => api.post('/fund/add', { fundCode, fundName, groupId }),
 
-  delete: (fundCode) => api.post('/fund/delete', { fundCode }),
+  delete: (fundCode, groupId) => {
+    const payload = { fundCode }
+    if (groupId != null) payload.groupId = groupId
+    return api.post('/fund/delete', payload)
+  },
 
   getHoldingList: () => api.get('/fund/holding/list'),
+
+  getWatchlistList: () => api.get('/fund/watchlist/list'),
 
   getPortfolioSummary: () => api.get('/fund/portfolio/summary'),
 
@@ -87,7 +93,19 @@ export const fundApi = {
   getOverallDailyProfit: (period = '6month') =>
     api.get(`/fund/daily-profit/overall?period=${period}`),
 
-  deleteBatch: (fundCodes) => api.post('/fund/delete/batch', { fundCodes })
+  deleteBatch: (fundCodes, groupId) => {
+    const payload = { fundCodes }
+    if (groupId != null) payload.groupId = groupId
+    return api.post('/fund/delete/batch', payload)
+  },
+
+  // 分组管理
+  getGroups: () => api.get('/fund/groups'),
+  createGroup: (name) => api.post('/fund/group', { name }),
+  renameGroup: (id, name) => api.put(`/fund/group/${id}`, { name }),
+  deleteGroup: (id) => api.delete(`/fund/group/${id}`),
+  reorderGroups: (groupIds) => api.put('/fund/groups/reorder', { groupIds }),
+  getGroupFunds: (groupId) => api.get(`/fund/group/${groupId}/funds`)
 }
 
 export const marketApi = {

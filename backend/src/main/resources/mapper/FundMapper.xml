@@ -4,7 +4,7 @@
 
     <select id="selectAll" resultType="com.fund.entity.Fund">
         SELECT f.id, f.user_id AS userId, f.fund_code AS fundCode, f.fund_name AS fundName,
-               f.create_time AS createTime,
+               f.group_id AS groupId, f.create_time AS createTime,
                uf.hold_share AS holdShare, uf.hold_amount AS holdAmount,
                uf.cost_price AS costPrice, uf.buy_date AS buyDate,
                uf.today_buy_share AS todayBuyShare, uf.today_sell_share AS todaySellShare
@@ -14,24 +14,78 @@
         ORDER BY f.create_time DESC
     </select>
 
+    <!-- 旧版兼容：按 group_type 字符串查询 -->
     <select id="selectByCode" resultType="com.fund.entity.Fund">
         SELECT f.id, f.user_id AS userId, f.fund_code AS fundCode, f.fund_name AS fundName,
-               f.create_time AS createTime,
+               f.group_id AS groupId, f.create_time AS createTime,
                uf.hold_share AS holdShare, uf.hold_amount AS holdAmount,
                uf.cost_price AS costPrice, uf.buy_date AS buyDate,
                uf.today_buy_share AS todayBuyShare, uf.today_sell_share AS todaySellShare
         FROM fund f
         LEFT JOIN user_fund uf ON f.fund_code = uf.fund_code AND f.user_id = uf.user_id
-        WHERE f.fund_code = #{fundCode} AND f.user_id = #{userId}
+        LEFT JOIN fund_group fg ON f.group_id = fg.id
+        WHERE f.fund_code = #{fundCode} AND f.user_id = #{userId} AND fg.group_type = #{groupType}
+    </select>
+
+    <!-- 旧版兼容：按 group_type 字符串查询 -->
+    <select id="selectByGroup" resultType="com.fund.entity.Fund">
+        SELECT f.id, f.user_id AS userId, f.fund_code AS fundCode, f.fund_name AS fundName,
+               f.group_id AS groupId, f.create_time AS createTime,
+               uf.hold_share AS holdShare, uf.hold_amount AS holdAmount,
+               uf.cost_price AS costPrice, uf.buy_date AS buyDate,
+               uf.today_buy_share AS todayBuyShare, uf.today_sell_share AS todaySellShare
+        FROM fund f
+        LEFT JOIN user_fund uf ON f.fund_code = uf.fund_code AND f.user_id = uf.user_id
+        LEFT JOIN fund_group fg ON f.group_id = fg.id
+        WHERE f.user_id = #{userId} AND fg.group_type = #{groupType}
+        ORDER BY f.create_time DESC
+    </select>
+
+    <!-- 新版：按 group_id 查询单个基金 -->
+    <select id="selectByCodeAndGroupId" resultType="com.fund.entity.Fund">
+        SELECT f.id, f.user_id AS userId, f.fund_code AS fundCode, f.fund_name AS fundName,
+               f.group_id AS groupId, f.create_time AS createTime,
+               uf.hold_share AS holdShare, uf.hold_amount AS holdAmount,
+               uf.cost_price AS costPrice, uf.buy_date AS buyDate,
+               uf.today_buy_share AS todayBuyShare, uf.today_sell_share AS todaySellShare
+        FROM fund f
+        LEFT JOIN user_fund uf ON f.fund_code = uf.fund_code AND f.user_id = uf.user_id
+        WHERE f.fund_code = #{fundCode} AND f.user_id = #{userId} AND f.group_id = #{groupId}
+    </select>
+
+    <!-- 新版：按 group_id 查询分组下所有基金 -->
+    <select id="selectByGroupId" resultType="com.fund.entity.Fund">
+        SELECT f.id, f.user_id AS userId, f.fund_code AS fundCode, f.fund_name AS fundName,
+               f.group_id AS groupId, f.create_time AS createTime,
+               uf.hold_share AS holdShare, uf.hold_amount AS holdAmount,
+               uf.cost_price AS costPrice, uf.buy_date AS buyDate,
+               uf.today_buy_share AS todayBuyShare, uf.today_sell_share AS todaySellShare
+        FROM fund f
+        LEFT JOIN user_fund uf ON f.fund_code = uf.fund_code AND f.user_id = uf.user_id
+        WHERE f.user_id = #{userId} AND f.group_id = #{groupId}
+        ORDER BY f.create_time DESC
     </select>
 
     <insert id="insert" parameterType="com.fund.entity.Fund" useGeneratedKeys="true" keyProperty="id">
-        INSERT INTO fund (user_id, fund_code, fund_name, create_time)
-        VALUES (#{userId}, #{fundCode}, #{fundName}, NOW())
+        INSERT INTO fund (user_id, fund_code, fund_name, group_id, create_time)
+        VALUES (#{userId}, #{fundCode}, #{fundName}, #{groupId}, NOW())
     </insert>
 
+    <!-- 旧版兼容：按 group_type 删除 -->
     <delete id="deleteByCode">
-        DELETE FROM fund WHERE fund_code = #{fundCode} AND user_id = #{userId}
+        DELETE f FROM fund f
+        LEFT JOIN fund_group fg ON f.group_id = fg.id
+        WHERE f.fund_code = #{fundCode} AND f.user_id = #{userId} AND fg.group_type = #{groupType}
+    </delete>
+
+    <!-- 新版：按 group_id 删除单个基金 -->
+    <delete id="deleteByCodeAndGroupId">
+        DELETE FROM fund WHERE fund_code = #{fundCode} AND user_id = #{userId} AND group_id = #{groupId}
+    </delete>
+
+    <!-- 删除分组下所有基金 -->
+    <delete id="deleteByGroupId">
+        DELETE FROM fund WHERE group_id = #{groupId} AND user_id = #{userId}
     </delete>
 
     <select id="countByCode" resultType="int">

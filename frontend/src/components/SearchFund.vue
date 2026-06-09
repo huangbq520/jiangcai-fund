@@ -78,6 +78,14 @@ const props = defineProps({
   compact: {
     type: Boolean,
     default: false
+  },
+  groupId: {
+    type: Number,
+    default: null
+  },
+  groups: {
+    type: Array,
+    default: () => []
   }
 })
 
@@ -198,13 +206,22 @@ const clearSelection = () => {
 const handleAdd = async () => {
   if (!selectedFund.value) return
 
+  const targetGroupId = props.groupId
+  if (!targetGroupId) {
+    toast.error('请先选择目标分组')
+    return
+  }
+
   try {
     const response = await fundStore.addFund(
       selectedFund.value.fundCode,
-      selectedFund.value.fundName
+      selectedFund.value.fundName,
+      targetGroupId
     )
     if (response.code === 200) {
-      toast.success('添加成功！')
+      const group = props.groups.find(g => g.id === targetGroupId)
+      const label = group ? `已添加到${group.name}` : '已添加'
+      toast.success(label + '！')
       clearSelection()
       emit('add-fund')
     } else {

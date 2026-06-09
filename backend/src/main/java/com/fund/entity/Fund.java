@@ -15,6 +15,11 @@ public class Fund {
 
     private String fundName;
 
+    @Deprecated
+    private String groupType;
+
+    private Long groupId;
+
     private BigDecimal holdShare;
 
     private BigDecimal holdAmount;

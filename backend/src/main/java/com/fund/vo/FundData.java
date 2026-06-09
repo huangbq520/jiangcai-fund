@@ -51,7 +51,8 @@ public class FundData {
     }
 
     public boolean isUseEstimatedValue() {
-        return tradingDay && !priced;
+        // 交易日且估算数据可用时，应使用估算净值
+        return tradingDay && priced;
     }
 
     public Double getOneWeekChange() { return oneWeekChange; }

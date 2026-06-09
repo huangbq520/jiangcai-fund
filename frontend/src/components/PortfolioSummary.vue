@@ -66,8 +66,8 @@ const emit = defineEmits(['view-detail'])
 const fundStore = useFundStore()
 const { summary } = storeToRefs(fundStore)
 
-const showData = ref(true)
-const showChart = ref(true)
+const showData = ref(false)
+const showChart = ref(false)
 
 useAutoRefresh(() => fundStore.silentFetchSummary(), 30000, isTradingHours)
 

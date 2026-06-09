@@ -1,19 +1,24 @@
 package com.fund.controller;
 
 import com.fund.entity.Fund;
+import com.fund.entity.FundGroup;
 import com.fund.entity.User;
 import com.fund.entity.UserFund;
+import com.fund.mapper.FundGroupMapper;
 import com.fund.mapper.FundMapper;
 import com.fund.mapper.UserMapper;
 import com.fund.mapper.UserFundMapper;
 import com.fund.service.FundDataService;
+import com.fund.service.FundGroupService;
 import com.fund.service.FundHoldingService;
 import com.fund.service.FundSearchService;
 import com.fund.service.DailyProfitService;
 import com.fund.vo.ApiResponse;
 import com.fund.vo.FundData;
+import com.fund.vo.FundGroupVO;
 import com.fund.vo.FundHoldingVO;
 import com.fund.vo.FundSearchResult;
+import com.fund.vo.FundWatchlistVO;
 import com.fund.vo.PerformanceData;
 import com.fund.vo.PortfolioSummary;
 import org.slf4j.Logger;
@@ -44,6 +49,9 @@ public class FundController {
     private FundMapper fundMapper;
 
     @Resource
+    private FundGroupMapper fundGroupMapper;
+
+    @Resource
     private UserMapper userMapper;
 
     @Resource
@@ -51,6 +59,9 @@ public class FundController {
 
     @Resource
     private FundHoldingService fundHoldingService;
+
+    @Resource
+    private FundGroupService fundGroupService;
 
     @Resource
     private DailyProfitService dailyProfitService;
@@ -136,11 +147,17 @@ public class FundController {
     }
 
     @GetMapping("/list")
-    public ApiResponse<List<Fund>> listFunds(HttpServletRequest request) {
+    public ApiResponse<List<Fund>> listFunds(HttpServletRequest request,
+                                              @RequestParam(value = "groupType", required = false) String groupType) {
         Long userId = getUserId(request);
-        logger.info("API: 获取基金列表, userId={}", userId);
+        logger.info("API: 获取基金列表, userId={}, groupType={}", userId, groupType);
         try {
-            List<Fund> funds = fundMapper.selectAll(userId);
+            List<Fund> funds;
+            if (groupType != null && !groupType.isEmpty()) {
+                funds = fundMapper.selectByGroup(userId, groupType);
+            } else {
+                funds = fundMapper.selectAll(userId);
+            }
             return ApiResponse.success(funds);
         } catch (Exception e) {
             logger.error("获取基金列表失败: {}", e.getMessage());
@@ -158,6 +175,19 @@ public class FundController {
         } catch (Exception e) {
             logger.error("获取持仓列表失败: {}", e.getMessage());
             return ApiResponse.error("获取持仓列表失败");
+        }
+    }
+
+    @GetMapping("/watchlist/list")
+    public ApiResponse<List<FundWatchlistVO>> listWatchlist(HttpServletRequest request) {
+        Long userId = getUserId(request);
+        logger.info("API: 获取自选列表, userId={}", userId);
+        try {
+            List<FundWatchlistVO> list = fundHoldingService.getWatchlistList(userId);
+            return ApiResponse.success(list);
+        } catch (Exception e) {
+            logger.error("获取自选列表失败: {}", e.getMessage());
+            return ApiResponse.error("获取自选列表失败");
         }
     }
 
@@ -179,36 +209,73 @@ public class FundController {
         Long userId = getUserId(httpRequest);
         String fundCode = request.get("fundCode");
         String fundName = request.get("fundName");
-        logger.info("API: 添加基金, fundCode={}, fundName={}, userId={}", fundCode, fundName, userId);
+
+        // 支持两种方式：groupId（新）或 groupType（旧）
+        Long groupId = null;
+        String groupTypeStr = null;
+
+        if (request.containsKey("groupId")) {
+            groupId = Long.parseLong(request.get("groupId"));
+        } else {
+            // 旧版兼容：根据 groupType 查找对应的分组
+            groupTypeStr = request.getOrDefault("groupType", "HOLDING");
+            FundGroup group = fundGroupMapper.findByUserIdAndGroupType(userId, groupTypeStr);
+            if (group == null) {
+                fundGroupService.initDefaultGroups(userId);
+                group = fundGroupMapper.findByUserIdAndGroupType(userId, groupTypeStr);
+            }
+            if (group != null) {
+                groupId = group.getId();
+            }
+        }
+
+        if (groupId == null) {
+            return ApiResponse.error("分组不存在，请先创建分组");
+        }
+
+        // 验证分组存在且属于该用户
+        FundGroup group = fundGroupMapper.findById(groupId);
+        if (group == null || !group.getUserId().equals(userId)) {
+            return ApiResponse.error("分组不存在");
+        }
+
+        logger.info("API: 添加基金, fundCode={}, fundName={}, groupId={}, groupName={}, userId={}",
+                fundCode, fundName, groupId, group.getName(), userId);
 
         if (fundCode == null || fundCode.trim().isEmpty()) {
             return ApiResponse.error("基金代码不能为空");
         }
 
         try {
-            Fund existingFund = fundMapper.selectByCode(fundCode, userId);
+            Fund existingFund = fundMapper.selectByCodeAndGroupId(fundCode, userId, groupId);
             if (existingFund != null) {
-                return ApiResponse.error("该基金已存在");
+                return ApiResponse.error("该基金已存在于此分组");
             }
 
             Fund fund = new Fund();
             fund.setUserId(userId);
             fund.setFundCode(fundCode);
             fund.setFundName(fundName);
+            fund.setGroupId(groupId);
             fundMapper.insert(fund);
 
-            UserFund userFund = new UserFund();
-            userFund.setUserId(userId);
-            userFund.setFundCode(fundCode);
-            userFund.setFundName(fundName);
-            userFund.setHoldShare(BigDecimal.ZERO);
-            userFund.setHoldAmount(BigDecimal.ZERO);
-            userFund.setCostPrice(BigDecimal.ZERO);
-            userFundMapper.insert(userFund);
+            // 只有HOLDING类型分组才创建 user_fund 记录
+            if ("HOLDING".equals(group.getGroupType())) {
+                UserFund userFund = new UserFund();
+                userFund.setUserId(userId);
+                userFund.setFundCode(fundCode);
+                userFund.setFundName(fundName);
+                userFund.setHoldShare(BigDecimal.ZERO);
+                userFund.setHoldAmount(BigDecimal.ZERO);
+                userFund.setCostPrice(BigDecimal.ZERO);
+                userFundMapper.insert(userFund);
+            }
 
             Map<String, Object> result = new HashMap<>();
             result.put("fundCode", fundCode);
             result.put("fundName", fundName);
+            result.put("groupId", groupId);
+            result.put("groupName", group.getName());
             return ApiResponse.success(result);
         } catch (Exception e) {
             logger.error("添加基金失败: fundCode={}, error={}", fundCode, e.getMessage());
@@ -354,15 +421,27 @@ public class FundController {
     public ApiResponse<Void> deleteFund(@RequestBody Map<String, String> request, HttpServletRequest httpRequest) {
         Long userId = getUserId(httpRequest);
         String fundCode = request.get("fundCode");
-        logger.info("API: 删除基金, fundCode={}, userId={}", fundCode, userId);
 
         if (fundCode == null || fundCode.trim().isEmpty()) {
             return ApiResponse.error("基金代码不能为空");
         }
 
         try {
-            userFundMapper.deleteByUserIdAndFundCode(userId, fundCode);
-            fundMapper.deleteByCode(fundCode, userId);
+            if (request.containsKey("groupId")) {
+                Long groupId = Long.parseLong(request.get("groupId"));
+                FundGroup group = fundGroupMapper.findById(groupId);
+                if (group != null && "HOLDING".equals(group.getGroupType())) {
+                    userFundMapper.deleteByUserIdAndFundCode(userId, fundCode);
+                }
+                fundMapper.deleteByCodeAndGroupId(fundCode, userId, groupId);
+                logger.info("API: 删除基金(by groupId), fundCode={}, groupId={}, userId={}", fundCode, groupId, userId);
+            } else {
+                // 旧版兼容
+                String groupType = request.getOrDefault("groupType", "HOLDING");
+                userFundMapper.deleteByUserIdAndFundCode(userId, fundCode);
+                fundMapper.deleteByCode(fundCode, userId, groupType);
+                logger.info("API: 删除基金(旧版), fundCode={}, groupType={}, userId={}", fundCode, groupType, userId);
+            }
             return ApiResponse.success(null);
         } catch (Exception e) {
             logger.error("删除基金失败: fundCode={}, error={}", fundCode, e.getMessage());
@@ -374,21 +453,151 @@ public class FundController {
     public ApiResponse<Void> deleteFundsBatch(@RequestBody Map<String, Object> request, HttpServletRequest httpRequest) {
         Long userId = getUserId(httpRequest);
         List<String> fundCodes = (List<String>) request.get("fundCodes");
-        logger.info("API: 批量删除基金, fundCodes={}, userId={}", fundCodes, userId);
 
         if (fundCodes == null || fundCodes.isEmpty()) {
             return ApiResponse.error("基金代码列表不能为空");
         }
 
         try {
-            for (String fundCode : fundCodes) {
-                userFundMapper.deleteByUserIdAndFundCode(userId, fundCode);
-                fundMapper.deleteByCode(fundCode, userId);
+            if (request.containsKey("groupId")) {
+                Long groupId = Long.parseLong(request.get("groupId").toString());
+                FundGroup group = fundGroupMapper.findById(groupId);
+                boolean isHolding = group != null && "HOLDING".equals(group.getGroupType());
+                for (String fundCode : fundCodes) {
+                    if (isHolding) {
+                        userFundMapper.deleteByUserIdAndFundCode(userId, fundCode);
+                    }
+                    fundMapper.deleteByCodeAndGroupId(fundCode, userId, groupId);
+                }
+                logger.info("API: 批量删除基金(by groupId), fundCodes={}, groupId={}, userId={}", fundCodes, groupId, userId);
+            } else {
+                String groupType = request.containsKey("groupType") ? (String) request.get("groupType") : "HOLDING";
+                for (String fundCode : fundCodes) {
+                    userFundMapper.deleteByUserIdAndFundCode(userId, fundCode);
+                    fundMapper.deleteByCode(fundCode, userId, groupType);
+                }
+                logger.info("API: 批量删除基金(旧版), fundCodes={}, groupType={}, userId={}", fundCodes, groupType, userId);
             }
             return ApiResponse.success(null);
         } catch (Exception e) {
             logger.error("批量删除基金失败: fundCodes={}, error={}", fundCodes, e.getMessage());
             return ApiResponse.error("批量删除基金失败");
+        }
+    }
+
+    // ===================== 分组管理 =====================
+
+    /**
+     * 获取用户所有分组
+     */
+    @GetMapping("/groups")
+    public ApiResponse<List<FundGroupVO>> listGroups(HttpServletRequest httpRequest) {
+        Long userId = getUserId(httpRequest);
+        logger.info("API: 获取分组列表, userId={}", userId);
+        try {
+            // 确保有默认分组
+            fundGroupService.initDefaultGroups(userId);
+            List<FundGroupVO> groups = fundGroupService.getUserGroups(userId);
+            return ApiResponse.success(groups);
+        } catch (Exception e) {
+            logger.error("获取分组列表失败: {}", e.getMessage());
+            return ApiResponse.error("获取分组列表失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 创建新分组
+     */
+    @PostMapping("/group")
+    public ApiResponse<FundGroupVO> createGroup(@RequestBody Map<String, String> request, HttpServletRequest httpRequest) {
+        Long userId = getUserId(httpRequest);
+        String name = request.get("name");
+        logger.info("API: 创建分组, name={}, userId={}", name, userId);
+        try {
+            FundGroupVO group = fundGroupService.createGroup(userId, name);
+            return ApiResponse.success(group);
+        } catch (IllegalArgumentException e) {
+            return ApiResponse.error(e.getMessage());
+        } catch (Exception e) {
+            logger.error("创建分组失败: {}", e.getMessage());
+            return ApiResponse.error("创建分组失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 重命名分组
+     */
+    @PutMapping("/group/{id}")
+    public ApiResponse<FundGroupVO> renameGroup(@PathVariable("id") Long groupId,
+                                                 @RequestBody Map<String, String> request,
+                                                 HttpServletRequest httpRequest) {
+        Long userId = getUserId(httpRequest);
+        String name = request.get("name");
+        logger.info("API: 重命名分组, groupId={}, name={}, userId={}", groupId, name, userId);
+        try {
+            FundGroupVO group = fundGroupService.renameGroup(groupId, userId, name);
+            return ApiResponse.success(group);
+        } catch (IllegalArgumentException e) {
+            return ApiResponse.error(e.getMessage());
+        } catch (Exception e) {
+            logger.error("重命名分组失败: {}", e.getMessage());
+            return ApiResponse.error("重命名分组失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 删除分组
+     */
+    @DeleteMapping("/group/{id}")
+    public ApiResponse<Void> deleteGroup(@PathVariable("id") Long groupId,
+                                          HttpServletRequest httpRequest) {
+        Long userId = getUserId(httpRequest);
+        logger.info("API: 删除分组, groupId={}, userId={}", groupId, userId);
+        try {
+            fundGroupService.deleteGroup(groupId, userId);
+            return ApiResponse.success(null);
+        } catch (IllegalArgumentException e) {
+            return ApiResponse.error(e.getMessage());
+        } catch (Exception e) {
+            logger.error("删除分组失败: {}", e.getMessage());
+            return ApiResponse.error("删除分组失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 重新排序分组
+     */
+    @PutMapping("/groups/reorder")
+    public ApiResponse<Void> reorderGroups(@RequestBody Map<String, Object> request,
+                                            HttpServletRequest httpRequest) {
+        Long userId = getUserId(httpRequest);
+        List<Long> groupIds = (List<Long>) request.get("groupIds");
+        logger.info("API: 重新排序分组, groupIds={}, userId={}", groupIds, userId);
+        try {
+            fundGroupService.reorderGroups(userId, groupIds);
+            return ApiResponse.success(null);
+        } catch (IllegalArgumentException e) {
+            return ApiResponse.error(e.getMessage());
+        } catch (Exception e) {
+            logger.error("重新排序分组失败: {}", e.getMessage());
+            return ApiResponse.error("重新排序分组失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 获取指定分组下的基金列表
+     */
+    @GetMapping("/group/{groupId}/funds")
+    public ApiResponse<List<?>> getGroupFunds(@PathVariable("groupId") Long groupId,
+                                               HttpServletRequest httpRequest) {
+        Long userId = getUserId(httpRequest);
+        logger.info("API: 获取分组基金列表, groupId={}, userId={}", groupId, userId);
+        try {
+            List<?> funds = fundHoldingService.getGroupFundList(userId, groupId);
+            return ApiResponse.success(funds);
+        } catch (Exception e) {
+            logger.error("获取分组基金列表失败: {}", e.getMessage());
+            return ApiResponse.error("获取分组基金列表失败: " + e.getMessage());
         }
     }
 

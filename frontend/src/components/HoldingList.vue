@@ -60,10 +60,11 @@
             <th class="col-code">代码</th>
             <th class="col-latest-change">最新涨幅</th>
             <th class="col-latest-net-value">最新净值</th>
-            <th class="col-amount">持仓金额</th>
+            
             <th class="col-estimate">估算涨幅</th>
+            <th class="col-profit">今日收益</th>
             <th class="col-yesterday">昨日收益</th>
-            <th class="col-profit">当日收益</th>
+            <th class="col-amount">持仓金额</th>
             <th class="col-rate">持仓收益率</th>
             <th class="col-week">近一周</th>
             <th class="col-month">近一月</th>
@@ -104,11 +105,11 @@
             </td>
             <td class="col-latest-net-value">
               <div class="latest-container">
-                <span>{{ holding.unitNetValue }}</span>
+                <span>{{ holding.currentNetValue || holding.unitNetValue }}</span>
                 <span class="latest-date">{{ holding.latestNetValueDate || formatLatestDate(holding) }}</span>
               </div>
             </td>
-            <td class="col-amount">{{ shouldShowPlaceholder(holding) ? '--' : formatNumber(holding.currentValue != null ? holding.currentValue : holding.holdAmount) }}</td>
+            
             <td class="col-estimate">
               <span :class="getProfitClass(holding.estimatedChange)">
                 {{ formatPercent(holding.estimatedChange) }}
@@ -129,8 +130,9 @@
               </div>
             </td>
             <td class="col-profit" :class="getProfitClass(holding.todayProfit)">
-              {{ shouldShowPlaceholder(holding) ? '--' : formatProfit(holding.todayProfit) }}
+              {{ shouldShowPlaceholder(holding) || !isTodayProfitAvailable(holding) ? '--' : formatProfit(holding.todayProfit) }}
             </td>
+            <td class="col-amount">{{ shouldShowPlaceholder(holding) ? '--' : formatNumber(holding.currentValue != null ? holding.currentValue : holding.holdAmount) }}</td>
             <td class="col-rate" :class="getProfitClass(holding.profitRate)">
               {{ shouldShowPlaceholder(holding) ? '--' : formatPercent(holding.profitRate) }}
             </td>
@@ -150,7 +152,7 @@
               {{ holding.oneYearChange != null ? formatPercent(holding.oneYearChange) : '--' }}
             </td>
             <td class="col-cost-price">
-              {{ shouldShowPlaceholder(holding) ? '--' : (holding.costPrice != null ? (Number(holding.costPrice)).toFixed(2) : '--') }}
+              {{ shouldShowPlaceholder(holding) ? '--' : (holding.costPrice != null ? (Number(holding.costPrice)).toFixed(4) : '--') }}
             </td>
             <td class="col-cost-amount">
               {{ shouldShowPlaceholder(holding) ? '--' : (holding.costAmount != null ? formatNumber(holding.costAmount) : '--') }}
@@ -248,6 +250,15 @@ const formatEstimateTime = (timeStr) => {
 const shouldShowPlaceholder = (holding) => {
   const holdAmount = holding.currentValue != null ? holding.currentValue : holding.holdAmount
   return !holdAmount || holdAmount === 0
+}
+
+// 今日收益是否可用：仅当最新净值日期为今天时才计算
+const isTodayProfitAvailable = (holding) => {
+  if (!holding.latestNetValueDate) return false
+  const today = new Date()
+  const mm = String(today.getMonth() + 1).padStart(2, '0')
+  const dd = String(today.getDate()).padStart(2, '0')
+  return holding.latestNetValueDate === `${mm}-${dd}`
 }
 
 const calculateYesterdayRate = (holding) => {
@@ -560,6 +571,7 @@ const handleBatchDelete = async () => {
 }
 
 .holding-table th {
+
   background: #f8fafc;
   font-weight: 700;
   font-size: 13px;
@@ -638,7 +650,7 @@ const handleBatchDelete = async () => {
 }
 
 .col-name {
-  text-align: left !important;
+  /* text-align: left !important; */
   width: 160px;
   position: sticky;
   left: 0;
@@ -685,7 +697,7 @@ const handleBatchDelete = async () => {
 
 .col-amount {
   width: 120px;
-  text-align: right !important;
+  /* text-align: right !important; */
   font-weight: 500;
 }
 
@@ -709,7 +721,7 @@ const handleBatchDelete = async () => {
 
 .col-yesterday {
   width: 110px;
-  text-align: right !important;
+  /* text-align: right !important; */
   font-weight: 500;
   font-size: 14px;
 }
@@ -717,7 +729,7 @@ const handleBatchDelete = async () => {
 .yesterday-container {
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
+  align-items: center;
   gap: 2px;
 }
 
@@ -729,7 +741,7 @@ const handleBatchDelete = async () => {
 
 .col-profit {
   width: 95px;
-  text-align: right !important;
+  /* text-align: right !important; */
   font-weight: 500;
   font-size: 14px;
 }

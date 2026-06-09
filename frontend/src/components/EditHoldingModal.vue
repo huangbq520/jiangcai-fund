@@ -76,10 +76,17 @@
                 <input v-model="form.costPrice" type="number" step="0.0001" />
               </div>
               <div class="calc-row">
-                <div class="calc-item"><span class="calc-label">持仓金额</span><span class="calc-value">{{ fmtMoney(computedAmount) }}</span></div>
-                <div class="calc-item"><span class="calc-label">当前市值</span><span class="calc-value" :class="profitClass(computedProfit)">{{ fmtMoney(computedValue) }}</span></div>
+                <div class="calc-item">
+                  <span class="calc-label">持仓金额</span>
+                  <span class="calc-value">{{ fmtMoney(computedAmount) }}</span>
+                </div>
+                
+                <div class="calc-item">
+                  <span class="calc-label">持仓盈亏</span>
+                  <span class="calc-value" :class="profitClass(computedProfit)">{{ fmtProfit(computedProfit) }}（{{ fmtPercent(computedProfitRate) }}）</span>
+                </div>
               </div>
-              <div class="calc-item full"><span class="calc-label">持仓盈亏</span><span class="calc-value" :class="profitClass(computedProfit)">{{ fmtProfit(computedProfit) }}（{{ fmtPercent(computedProfitRate) }}）</span></div>
+              
             </div>
 
             <div v-else key="amount" class="mode-panel">
@@ -98,16 +105,17 @@
                   <input v-model="form.profitRate" type="number" step="0.01" @focus="profitField='rate'" />
                 </div>
               </div>
+
               <div class="calc-row">
                 <div class="calc-item"><span class="calc-label">→ 份额</span><span class="calc-value">{{ computedReverseShare }}</span></div>
-                <div class="calc-item"><span class="calc-label">→ 成本价</span><span class="calc-value">{{ computedReverseCost }}</span></div>
+                <div class="calc-item"><span class="calc-label">→ 成本价 <span class="cost-nav-source">{{ costNAVSource }}</span></span><span class="calc-value">{{ computedReverseCost }}</span></div>
               </div>
             </div>
           </Transition>
 
           <div class="form-item date-item">
             <label>买入日期</label>
-            <input v-model="form.buyDate" type="date" />
+            <input v-model="form.buyDate" type="date" :max="yesterday" />
           </div>
         </div>
 
@@ -140,6 +148,8 @@ const adjustDate = ref('')
 const buyAmount = ref('')
 const before3pm = ref(true)
 const dateNav = ref(null)
+const editCostNav = ref(null)
+const costNavLoading = ref(false)
 const toast = useToast()
 const fundStore = useFundStore()
 
@@ -154,7 +164,29 @@ const sellOptions = [
   { label: '全部', ratio: 1 }
 ]
 
+const yesterday = computed(() => {
+  const d = new Date()
+  d.setDate(d.getDate() - 1)
+  return d.toISOString().slice(0, 10)
+})
+
 const NAV = computed(() => parseFloat(props.holding?.currentNetValue || props.holding?.estimatedNetValue || props.holding?.unitNetValue || 0))
+
+// 金额模式下计算成本使用的净值：必须使用买入日期的历史净值，不允许回退到实时净值
+const costNAV = computed(() => {
+  if (mode.value !== 'AMOUNT') return NAV.value
+  if (editCostNav.value) return editCostNav.value
+  // 返回 null 表示尚未获取到历史净值，UI 应显示加载中
+  return null
+})
+
+const costNAVSource = computed(() => {
+  if (mode.value !== 'AMOUNT') return ''
+  if (costNavLoading.value) return '（查询中...）'
+  if (editCostNav.value) return '（买入日净值）'
+  if (!form.buyDate) return '（请选择买入日期）'
+  return '（未找到该日净值，请更换日期）'
+})
 
 const fmtNAV = computed(() => NAV.value ? NAV.value.toFixed(4) : '--')
 const fmtMoney = (v) => { const n = Number(v) || 0; return '¥' + n.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }
@@ -167,11 +199,26 @@ const computedValue = computed(() => (parseFloat(form.holdShare) || 0) * NAV.val
 const computedProfit = computed(() => computedValue.value - computedAmount.value)
 const computedProfitRate = computed(() => computedAmount.value ? (computedProfit.value / computedAmount.value) * 100 : 0)
 
-const computedReverseShare = computed(() => { const a = parseFloat(form.holdAmount) || 0; return NAV.value ? (a / NAV.value).toFixed(2) : '0.00' })
+const costNavDisplay = computed(() => {
+  if (costNavLoading.value) return '查询中...'
+  if (editCostNav.value) return editCostNav.value.toFixed(4)
+  if (form.buyDate) return '未找到'
+  return '请选择日期'
+})
+
+const computedReverseShare = computed(() => {
+  const nav = costNAV.value
+  if (!nav) return '...'
+  const a = parseFloat(form.holdAmount) || 0
+  return a > 0 ? (a / nav).toFixed(2) : '0.00'
+})
 const computedReverseCost = computed(() => {
-  const share = parseFloat(computedReverseShare.value) || 1
+  const nav = costNAV.value
+  if (!nav) return '...'
   const amt = parseFloat(form.holdAmount) || 0
+  if (amt <= 0) return nav.toFixed(4)  // 未输入金额时显示净值本身作为成本价参考
   const p = parseFloat(form.profit) || 0
+  const share = amt / nav
   return ((amt - p) / share).toFixed(4)
 })
 
@@ -198,6 +245,16 @@ watch([adjustDate, before3pm], async ([date, before]) => {
   } catch { dateNav.value = null }
 })
 
+// 金额模式下监听买入日期变化，获取历史净值作为成本净值
+watch(() => form.buyDate, async (date) => {
+  if (!date || scene.value !== 'edit' || mode.value !== 'AMOUNT') {
+    editCostNav.value = null
+    return
+  }
+  editCostNav.value = null  // 先清除旧值，触发 loading 状态
+  fetchCostNav(date)
+})
+
 const effectiveNAV = computed(() => dateNav.value || NAV.value)
 const effectiveNavDisplay = computed(() => effectiveNAV.value ? effectiveNAV.value.toFixed(4) : '--')
 
@@ -208,7 +265,7 @@ const resetForm = () => {
   form.holdShare = h.holdShare ? String(h.holdShare) : ''
   form.costPrice = h.costPrice ? String(h.costPrice) : ''
   form.buyDate = h.buyDate || ''
-  form.holdAmount = h.currentValue ? String(h.currentValue) : ''
+  form.holdAmount = h.holdAmount ? String(h.holdAmount) : ''
   form.profit = ''
   form.profitRate = ''
   adjustShare.value = ''
@@ -216,21 +273,61 @@ const resetForm = () => {
   buyAmount.value = ''
   before3pm.value = true
   dateNav.value = null
+  editCostNav.value = null
 }
 
 watch(() => props.holding, resetForm, { immediate: true })
 
 const switchMode = (m) => {
   if (m === mode.value) return
+  mode.value = m
   if (m === 'AMOUNT') {
-    form.holdAmount = computedValue.value.toFixed(2)
-    form.profit = computedProfit.value.toFixed(2)
+    // 使用成本金额（份额 × 成本价），不是当前市值
+    form.holdAmount = computedAmount.value ? computedAmount.value.toFixed(2) : ''
+    form.profit = ''
     form.profitRate = ''
+    // 触发买入日期对应的历史净值查询
+    if (form.buyDate) {
+      fetchCostNav(form.buyDate)
+    }
   } else {
     form.holdShare = computedReverseShare.value
     form.costPrice = computedReverseCost.value
+    editCostNav.value = null
+    costNavLoading.value = false
   }
-  mode.value = m
+}
+
+// 根据买入日期获取成本净值（含下一交易日回退）
+const fetchCostNav = async (date) => {
+  if (!date) { editCostNav.value = null; return }
+  costNavLoading.value = true
+  try {
+    let res = await fundApi.getNavAt(props.holding.fundCode, date)
+    if (res.code === 200 && res.data?.nav) {
+      editCostNav.value = Number(res.data.nav)
+      costNavLoading.value = false
+      return
+    }
+    // 如果该日期无数据（周末/假日），向后查找下一个交易日
+    const next = new Date(date)
+    for (let i = 0; i < 7; i++) {
+      next.setDate(next.getDate() + 1)
+      const nextStr = next.toISOString().slice(0, 10)
+      res = await fundApi.getNavAt(props.holding.fundCode, nextStr)
+      if (res.code === 200 && res.data?.nav) {
+        editCostNav.value = Number(res.data.nav)
+        costNavLoading.value = false
+        return
+      }
+    }
+    editCostNav.value = null
+    console.warn('未找到基金 ' + props.holding.fundCode + ' 在 ' + date + ' 及之后7天的历史净值')
+  } catch (e) {
+    editCostNav.value = null
+    console.error('获取历史净值失败:', e)
+  }
+  costNavLoading.value = false
 }
 
 const switchScene = (s) => { scene.value = s; if (s === 'edit') resetForm() }
@@ -264,7 +361,8 @@ const handleSubmit = async () => {
         mode: 'AMOUNT', holdAmount: form.holdAmount || '0',
         profit: profitField.value === 'amount' ? form.profit : null,
         profitRate: profitField.value === 'rate' ? form.profitRate : null,
-        buyDate: form.buyDate || null
+        buyDate: form.buyDate || null,
+        costNav: editCostNav.value || null
       })
     }
 
@@ -329,7 +427,7 @@ const handleClose = () => emit('close')
 
 .calc-row { display: flex; gap: 12px; margin-bottom: 14px; }
 .calc-item { flex: 1; background: #f8fafc; border-radius: 8px; padding: 10px 12px; }
-.calc-item.full { flex: none; width: 100%; }
+
 .calc-label { display: block; font-size: 11px; color: #94a3b8; margin-bottom: 4px; }
 .calc-value { font-size: 15px; font-weight: 600; color: #334155; }
 
@@ -343,6 +441,14 @@ const handleClose = () => emit('close')
 .time-btn { padding: 6px 14px; border: 1px solid #e2e8f0; background: #fff; border-radius: 8px; font-size: 13px; color: #64748b; cursor: pointer; transition: all 0.15s; }
 .time-btn.active { background: #1677ff; color: #fff; border-color: #1677ff; }
 .time-btn:hover:not(.active) { border-color: #1677ff; color: #1677ff; }
+
+
+.cost-nav-label { font-size: 13px; color: #64748b; font-weight: 500; }
+.cost-nav-value { font-size: 16px; font-weight: 700; color: #1677ff; }
+.cost-nav-value.loading { color: #94a3b8; font-size: 13px; font-weight: 400; }
+.cost-nav-value.missing { color: #f56c6c; font-size: 13px; font-weight: 500; }
+
+.cost-nav-source { font-weight: 400; font-size: 10px; color: #94a3b8; }
 
 .profit-up { color: #e53935 !important; }
 .profit-down { color: #009e5f !important; }

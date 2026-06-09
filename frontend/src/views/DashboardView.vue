@@ -20,7 +20,7 @@
       <h1>酱菜养基</h1>
     </div>
     <div class="header-search">
-      <SearchFund @add-fund="handleAddFund" :compact="true" />
+      <SearchFund @add-fund="handleAddFund" :compact="true" :group-id="activeGroupId" :groups="fundStore.groups" />
     </div>
     <div class="header-actions">
       <a
@@ -43,13 +43,32 @@
       <MarketIndex @select="openQuote" />
     </section>
 
-    <section class="summary-section">
+    <!-- 资产配置 — 仅持仓分组可见 -->
+    <section v-if="isHoldingActive" class="summary-section">
       <PortfolioSummary @view-detail="handleViewDetail" />
     </section>
 
-    <section class="list-section">
+    <!-- 分组标签 — 管理所有分组（持仓 + 自选 + 自定义） -->
+    <section class="group-section">
+      <GroupManager
+        v-model="activeGroupId"
+        @groups-changed="handleGroupsChanged"
+      />
+    </section>
+
+    <!-- 持仓分组 — 显示持仓表格 -->
+    <section v-if="isHoldingActive" class="list-section">
       <HoldingList
         @update="handleHoldingUpdate"
+        @view-detail="handleViewDetail"
+      />
+    </section>
+
+    <!-- 非持仓分组 — 显示自选表格 -->
+    <section v-else class="list-section">
+      <WatchlistTable
+        :group-id="activeGroupId"
+        @update="handleWatchlistUpdate"
         @view-detail="handleViewDetail"
       />
     </section>
@@ -71,15 +90,17 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import MarketIndex from '../components/MarketIndex.vue'
 import SearchFund from '../components/SearchFund.vue'
 import PortfolioSummary from '../components/PortfolioSummary.vue'
 import HoldingList from '../components/HoldingList.vue'
+import WatchlistTable from '../components/WatchlistTable.vue'
 import FundDetailModal from '../components/FundDetailModal.vue'
 import IndexQuoteModal from '../components/IndexQuoteModal.vue'
 import UserMenu from '../components/UserMenu.vue'
+import GroupManager from '../components/GroupManager.vue'
 import { useFundStore } from '../stores/fundStore'
 
 const router = useRouter()
@@ -90,6 +111,29 @@ const showDetail = computed(() => !!route.params.fundCode)
 const currentFundCode = computed(() => route.params.fundCode || '')
 const quoteIndex = ref(null)
 
+// 当前激活的分组 ID
+const activeGroupId = ref(null)
+
+// 判断当前激活的分组是否为持仓类型
+const isHoldingActive = computed(() => {
+  const group = fundStore.groups.find(g => g.id === activeGroupId.value)
+  return group ? group.groupType === 'HOLDING' : false
+})
+
+onMounted(async () => {
+  await fundStore.fetchGroups()
+  // 默认激活持仓分组
+  const holdingGroup = fundStore.holdingGroup
+  if (holdingGroup) {
+    activeGroupId.value = holdingGroup.id
+  } else if (fundStore.groups.length > 0) {
+    activeGroupId.value = fundStore.groups[0].id
+  }
+  fundStore.fetchHoldings()
+  fundStore.fetchSummary()
+  fundStore.fetchWatchlist()
+})
+
 const openQuote = (index) => {
   quoteIndex.value = index
 }
@@ -99,12 +143,30 @@ const closeQuote = () => {
 }
 
 const handleAddFund = async (fundCode, fundName) => {
-  await fundStore.addFund(fundCode, fundName)
+  // 添加到当前激活的分组
+  if (activeGroupId.value) {
+    await fundStore.addFund(fundCode, fundName, activeGroupId.value)
+  }
 }
 
 const handleHoldingUpdate = () => {
   fundStore.fetchHoldings()
   fundStore.fetchSummary()
+}
+
+const handleWatchlistUpdate = () => {
+  // 刷新当前分组的基金列表
+  if (activeGroupId.value) {
+    fundStore.fetchGroupFunds(activeGroupId.value)
+  }
+}
+
+const handleGroupsChanged = () => {
+  // 分组变更后刷新数据
+  if (isHoldingActive.value) {
+    fundStore.fetchHoldings()
+    fundStore.fetchSummary()
+  }
 }
 
 const handleViewDetail = (fundCode) => {
@@ -347,6 +409,10 @@ const closeDetail = () => {
 
 .market-section {
   margin-bottom: 16px;
+}
+
+.group-section {
+  margin-bottom: 20px;
 }
 
 .summary-section {

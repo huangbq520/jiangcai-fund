@@ -2,12 +2,14 @@ package com.fund.service;
 
 import com.fund.entity.Fund;
 import com.fund.entity.FundDailyProfit;
+import com.fund.entity.FundGroup;
 import com.fund.entity.UserFund;
 import com.fund.mapper.FundDailyProfitMapper;
 import com.fund.mapper.FundMapper;
 import com.fund.mapper.UserFundMapper;
 import com.fund.vo.FundData;
 import com.fund.vo.FundHoldingVO;
+import com.fund.vo.FundWatchlistVO;
 import com.fund.vo.PortfolioSummary;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -50,6 +52,9 @@ public class FundHoldingService {
     @Resource
     private FundDailyProfitMapper fundDailyProfitMapper;
 
+    @Resource
+    private FundGroupService fundGroupService;
+
     private boolean isAfterTradingClose() {
         return LocalTime.now(BEIJING_ZONE).isAfter(AFTERNOON_CLOSE);
     }
@@ -79,7 +84,16 @@ public class FundHoldingService {
     }
 
     public List<FundHoldingVO> getHoldingList(Long userId) {
-        List<Fund> funds = fundMapper.selectAll(userId);
+        FundGroup holdingGroup = fundGroupService.getHoldingGroup(userId);
+        if (holdingGroup == null) {
+            logger.warn("用户 {} 没有HOLDING分组，初始化默认分组", userId);
+            fundGroupService.initDefaultGroups(userId);
+            holdingGroup = fundGroupService.getHoldingGroup(userId);
+        }
+        if (holdingGroup == null) {
+            return new ArrayList<>();
+        }
+        List<Fund> funds = fundMapper.selectByGroupId(userId, holdingGroup.getId());
         List<FundHoldingVO> holdingList = new ArrayList<>();
 
         for (Fund fund : funds) {
@@ -107,7 +121,11 @@ public class FundHoldingService {
         summary.setTotalProfitRate(BigDecimal.ZERO);
         summary.setFundCount(0);
 
-        List<Fund> funds = fundMapper.selectAll(userId);
+        FundGroup holdingGroup = fundGroupService.getHoldingGroup(userId);
+        if (holdingGroup == null) {
+            return summary;
+        }
+        List<Fund> funds = fundMapper.selectByGroupId(userId, holdingGroup.getId());
         if (funds.isEmpty()) {
             return summary;
         }
@@ -169,6 +187,36 @@ public class FundHoldingService {
         }
 
         return summary;
+    }
+
+    public List<FundWatchlistVO> getWatchlistList(Long userId) {
+        FundGroup watchlistGroup = fundGroupService.getDefaultWatchlistGroup(userId);
+        if (watchlistGroup == null) {
+            fundGroupService.initDefaultGroups(userId);
+            watchlistGroup = fundGroupService.getDefaultWatchlistGroup(userId);
+        }
+        if (watchlistGroup == null) {
+            return new ArrayList<>();
+        }
+        List<Fund> funds = fundMapper.selectByGroupId(userId, watchlistGroup.getId());
+        List<FundWatchlistVO> list = new ArrayList<>();
+
+        for (Fund fund : funds) {
+            FundData fundData = fundDataService.getFundData(fund.getFundCode());
+            FundWatchlistVO vo = new FundWatchlistVO();
+            vo.setFundCode(fund.getFundCode());
+            vo.setFundName(fund.getFundName());
+            vo.setUnitNetValue(fundData.getUnitNetValue());
+            vo.setEstimatedNetValue(fundData.getEstimatedNetValue());
+            vo.setEstimatedChange(fundData.getEstimatedChange());
+            vo.setYesterdayChange(fundData.getYesterdayChange());
+            vo.setValuationTime(fundData.getValuationTime());
+            vo.setLatestNetValueDate(fundData.getLatestNetValueDate());
+            vo.setCurrentNetValue(determineCurrentNetValue(fundData, isAfterTradingClose()));
+            list.add(vo);
+        }
+
+        return list;
     }
 
     private FundHoldingVO calculateProfit(Fund fund, FundData fundData, UserFund userFund) {
@@ -236,35 +284,53 @@ public class FundHoldingService {
         boolean alreadyConfirmed = isTodayProfitConfirmed(userFund);
 
         if (alreadyConfirmed) {
-            vo.setTodayProfitConfirmed(userFund.getConfirmedProfit() != null ?
-                    userFund.getConfirmedProfit().setScale(2, RoundingMode.HALF_UP) :
-                    BigDecimal.ZERO);
-            vo.setTodayProfit(vo.getTodayProfitConfirmed());
-            vo.setProfitStatus(1);
-            vo.setProfitSource(PROFIT_SOURCE_YESTERDAY_NET_VALUE);
+            // 二次确认：最新净值日期必须是今天，防止数据源不一致导致误显示
+            String latestDateCheck = fundData.getLatestNetValueDate();
+            String todayCheckStr = new java.text.SimpleDateFormat("MM-dd").format(new java.util.Date());
+            if (latestDateCheck != null && latestDateCheck.equals(todayCheckStr)) {
+                vo.setTodayProfitConfirmed(userFund.getConfirmedProfit() != null ?
+                        userFund.getConfirmedProfit().setScale(2, RoundingMode.HALF_UP) :
+                        BigDecimal.ZERO);
+                vo.setTodayProfit(vo.getTodayProfitConfirmed());
+                vo.setProfitStatus(1);
+                vo.setProfitSource(PROFIT_SOURCE_YESTERDAY_NET_VALUE);
 
-            String currentNetValue = determineCurrentNetValue(fundData, postClose);
-            vo.setCurrentNetValue(currentNetValue);
-            if (currentNetValue != null && !currentNetValue.isEmpty()) {
-                BigDecimal confirmedNetValueBD = userFund.getConfirmedNetValue() != null ?
-                        userFund.getConfirmedNetValue() : new BigDecimal(currentNetValue);
-                BigDecimal currentValue = shareForToday.multiply(confirmedNetValueBD).setScale(2, RoundingMode.HALF_UP);
-                vo.setCurrentValue(currentValue);
+                String currentNetValue = determineCurrentNetValue(fundData, postClose);
+                vo.setCurrentNetValue(currentNetValue);
+                if (currentNetValue != null && !currentNetValue.isEmpty()) {
+                    BigDecimal confirmedNetValueBD = userFund.getConfirmedNetValue() != null ?
+                            userFund.getConfirmedNetValue() : new BigDecimal(currentNetValue);
+                    BigDecimal currentValue = shareForToday.multiply(confirmedNetValueBD).setScale(2, RoundingMode.HALF_UP);
+                    vo.setCurrentValue(currentValue);
 
-                BigDecimal cost = shareForToday.multiply(costPrice);
-                if (cost.compareTo(BigDecimal.ZERO) > 0) {
-                    BigDecimal profit = currentValue.subtract(cost);
-                    BigDecimal profitRate = profit.divide(cost, 4, RoundingMode.HALF_UP)
-                        .multiply(BigDecimal.valueOf(100));
-                    vo.setProfitRate(profitRate.setScale(2, RoundingMode.HALF_UP));
+                    BigDecimal cost = shareForToday.multiply(costPrice);
+                    if (cost.compareTo(BigDecimal.ZERO) > 0) {
+                        BigDecimal profit = currentValue.subtract(cost);
+                        BigDecimal profitRate = profit.divide(cost, 4, RoundingMode.HALF_UP)
+                            .multiply(BigDecimal.valueOf(100));
+                        vo.setProfitRate(profitRate.setScale(2, RoundingMode.HALF_UP));
+                    }
                 }
+                return vo;
             }
-            return vo;
+            // 最新净值日期不是今天，即使之前确认过也不可用，回退重新计算
+            logger.debug("已确认收益但最新净值日期({})不是今天，回退重新计算: fundCode={}",
+                    latestDateCheck, fund.getFundCode());
         }
 
         if (postClose) {
             String unitNetValue = fundData.getUnitNetValue();
-            if (unitNetValue != null && !unitNetValue.isEmpty() && !unitNetValue.equals("null")) {
+            String yesterdayNetValue = fundData.getYesterdayNetValue();
+            // 判断今日净值是否已发布：单位净值已更新 且 历史数据日期为今天
+            String todayNavDateStr = new java.text.SimpleDateFormat("MM-dd").format(new java.util.Date());
+            boolean todayNavConfirmed = unitNetValue != null && !unitNetValue.isEmpty()
+                    && !unitNetValue.equals("null")
+                    && yesterdayNetValue != null && !yesterdayNetValue.isEmpty()
+                    && !yesterdayNetValue.equals(unitNetValue)
+                    && fundData.getLatestNetValueDate() != null
+                    && fundData.getLatestNetValueDate().equals(todayNavDateStr);
+
+            if (todayNavConfirmed) {
                 BigDecimal unitNetValueBD = new BigDecimal(unitNetValue);
                 BigDecimal currentValue = shareForToday.multiply(unitNetValueBD).setScale(2, RoundingMode.HALF_UP);
 
@@ -296,6 +362,7 @@ public class FundHoldingService {
                 }
                 return vo;
             }
+            // 今日净值尚未发布（单位净值仍是昨日的），回退到估算净值路径
         }
 
         String currentNetValue = determineCurrentNetValue(fundData, postClose);
@@ -324,13 +391,28 @@ public class FundHoldingService {
         BigDecimal currentValue = shareForToday.multiply(currentNetValueBD);
         vo.setCurrentValue(currentValue.setScale(2, RoundingMode.HALF_UP));
 
-        // 优先使用估算涨幅计算当日收益，确保实时更新
+        // 检查最新净值日期是否为今天，不是今天则不计算今日收益
+        String latestDate = fundData.getLatestNetValueDate();
+        boolean todayNavAvailable = false;
+        if (latestDate != null && !latestDate.isEmpty()) {
+            String todayStr = new java.text.SimpleDateFormat("MM-dd").format(new java.util.Date());
+            todayNavAvailable = latestDate.equals(todayStr);
+        }
+
         BigDecimal todayProfit;
         String profitSource;
-        
-        // 使用估算涨幅计算当日收益
-        todayProfit = calculateProfitByChangePercent(currentValue, fundData.getEstimatedChange());
-        profitSource = PROFIT_SOURCE_CHANGEPCT;
+
+        if (todayNavAvailable) {
+            // 今日净值已发布，使用估算涨幅计算当日收益
+            todayProfit = calculateProfitByChangePercent(currentValue, fundData.getEstimatedChange());
+            profitSource = PROFIT_SOURCE_CHANGEPCT;
+        } else {
+            // 今日净值未发布，不计算今日收益
+            todayProfit = BigDecimal.ZERO;
+            profitSource = PROFIT_SOURCE_NONE;
+            logger.debug("最新净值日期({})不是今天({})，今日收益设为0: fundCode={}",
+                    latestDate, new java.text.SimpleDateFormat("MM-dd").format(new java.util.Date()), fund.getFundCode());
+        }
 
         vo.setTodayProfit(todayProfit.setScale(2, RoundingMode.HALF_UP));
         vo.setProfitSource(profitSource);
@@ -356,30 +438,43 @@ public class FundHoldingService {
     }
 
     private String determineCurrentNetValue(FundData fundData, boolean postClose) {
+        // 1. 交易日且估算数据可用时，优先使用估算净值
+        if (fundData.isUseEstimatedValue()) {
+            Double estCoverage = fundData.getEstPricedCoverage();
+            if (estCoverage != null && estCoverage > EST_PRICED_COVERAGE_THRESHOLD) {
+                return fundData.getEstimatedNetValue();
+            }
+            String gsz = fundData.getEstimatedNetValue();
+            if (gsz != null && !gsz.isEmpty() && !gsz.equals("null")) {
+                return gsz;
+            }
+        }
+
+        // 2. 盘后：判断今日净值是否已更新（不同于昨日净值）
         if (postClose) {
             String unitNetValue = fundData.getUnitNetValue();
+            String yesterdayNetValue = fundData.getYesterdayNetValue();
             if (unitNetValue != null && !unitNetValue.isEmpty() && !unitNetValue.equals("null")) {
+                // 如果单位净值与昨日净值不同，说明今日净值已更新
+                if (yesterdayNetValue != null && !yesterdayNetValue.isEmpty()
+                        && !yesterdayNetValue.equals(unitNetValue)) {
+                    return unitNetValue;
+                }
+                // 今日净值未更新（与昨日相同），但有估算数据就用估算
+                String gsz = fundData.getEstimatedNetValue();
+                if (gsz != null && !gsz.isEmpty() && !gsz.equals("null")) {
+                    return gsz;
+                }
                 return unitNetValue;
             }
         }
 
-        boolean useEstimated = fundData.isUseEstimatedValue();
-
-        if (!useEstimated) {
-            return fundData.getUnitNetValue();
+        // 3. 兜底：返回单位净值
+        String unitNetValue = fundData.getUnitNetValue();
+        if (unitNetValue != null && !unitNetValue.isEmpty() && !unitNetValue.equals("null")) {
+            return unitNetValue;
         }
-
-        Double estCoverage = fundData.getEstPricedCoverage();
-        if (estCoverage != null && estCoverage > EST_PRICED_COVERAGE_THRESHOLD) {
-            return fundData.getEstimatedNetValue();
-        }
-
-        String gsz = fundData.getEstimatedNetValue();
-        if (gsz != null && !gsz.isEmpty() && !gsz.equals("null")) {
-            return gsz;
-        }
-
-        return fundData.getUnitNetValue();
+        return null;
     }
 
     private BigDecimal calculateProfitByChangePercent(BigDecimal currentValue, Double estimatedChange) {
@@ -392,22 +487,94 @@ public class FundHoldingService {
     }
 
     public FundHoldingVO getSingleHolding(Long userId, String fundCode) {
-        Fund fund = fundMapper.selectByCode(fundCode, userId);
+        FundGroup holdingGroup = fundGroupService.getHoldingGroup(userId);
+        if (holdingGroup == null) return null;
+        Fund fund = fundMapper.selectByCodeAndGroupId(fundCode, userId, holdingGroup.getId());
         if (fund == null) return null;
         FundData fundData = fundDataService.getFundData(fundCode);
         UserFund userFund = userFundMapper.findByUserIdAndFundCode(userId, fundCode);
         return calculateProfit(fund, fundData, userFund);
     }
 
-    public void applyModeTwo(UserFund userFund, Map<String, Object> request) {
-        FundData fundData = fundDataService.getFundData(userFund.getFundCode());
-        String currentNetValue = determineCurrentNetValue(fundData, isAfterTradingClose());
-        if (currentNetValue == null || currentNetValue.isEmpty() || currentNetValue.equals("null")) {
-            currentNetValue = fundData.getUnitNetValue();
+    /**
+     * 获取任意分组的基金列表（通用方法）
+     * HOLDING型分组返回 FundHoldingVO（含财务数据），其他类型返回 FundWatchlistVO
+     */
+    public List<?> getGroupFundList(Long userId, Long groupId) {
+        FundGroup group = fundGroupService.getGroupById(groupId);
+        if (group == null || !group.getUserId().equals(userId)) {
+            logger.warn("分组不存在或不属于该用户: groupId={}, userId={}", groupId, userId);
+            return new ArrayList<>();
         }
-        BigDecimal currentNAV = new BigDecimal(currentNetValue != null && !currentNetValue.equals("null") ? currentNetValue : "1");
 
+        List<Fund> funds = fundMapper.selectByGroupId(userId, groupId);
+
+        if ("HOLDING".equals(group.getGroupType())) {
+            List<FundHoldingVO> holdingList = new ArrayList<>();
+            for (Fund fund : funds) {
+                FundData fundData = fundDataService.getFundData(fund.getFundCode());
+                UserFund userFund = userFundMapper.findByUserIdAndFundCode(fund.getUserId(), fund.getFundCode());
+                FundHoldingVO vo = calculateProfit(fund, fundData, userFund);
+                if (vo.getCurrentValue() != null && vo.getCurrentValue().compareTo(BigDecimal.ZERO) > 0) {
+                    userFundMapper.updateHoldAmount(fund.getFundCode(), vo.getCurrentValue());
+                }
+                holdingList.add(vo);
+            }
+            return holdingList;
+        } else {
+            List<FundWatchlistVO> list = new ArrayList<>();
+            for (Fund fund : funds) {
+                FundData fundData = fundDataService.getFundData(fund.getFundCode());
+                FundWatchlistVO vo = new FundWatchlistVO();
+                vo.setFundCode(fund.getFundCode());
+                vo.setFundName(fund.getFundName());
+                vo.setUnitNetValue(fundData.getUnitNetValue());
+                vo.setEstimatedNetValue(fundData.getEstimatedNetValue());
+                vo.setEstimatedChange(fundData.getEstimatedChange());
+                vo.setYesterdayChange(fundData.getYesterdayChange());
+                vo.setValuationTime(fundData.getValuationTime());
+                vo.setLatestNetValueDate(fundData.getLatestNetValueDate());
+                vo.setCurrentNetValue(determineCurrentNetValue(fundData, isAfterTradingClose()));
+                list.add(vo);
+            }
+            return list;
+        }
+    }
+
+    public void applyModeTwo(UserFund userFund, Map<String, Object> request) {
         BigDecimal holdAmount = new BigDecimal(request.get("holdAmount").toString());
+
+        // 优先使用前端传递的买入日净值（前端已通过 /nav-at 查询确认）
+        BigDecimal effectiveNAV = null;
+        if (request.containsKey("costNav") && request.get("costNav") != null
+                && !request.get("costNav").toString().isEmpty()) {
+            effectiveNAV = new BigDecimal(request.get("costNav").toString());
+            logger.info("applyModeTwo: 使用前端传递的买入日净值 {} 计算份额", effectiveNAV);
+        }
+
+        // 回退：根据买入日期查询历史净值
+        if (effectiveNAV == null && request.containsKey("buyDate") && request.get("buyDate") != null
+                && !request.get("buyDate").toString().isEmpty()) {
+            String buyDateStr = request.get("buyDate").toString();
+            effectiveNAV = fundDataService.getNavByDate(userFund.getFundCode(), buyDateStr);
+            if (effectiveNAV != null) {
+                logger.info("applyModeTwo: 使用购买日 {} 的历史净值 {} 计算份额", buyDateStr, effectiveNAV);
+            } else {
+                logger.warn("applyModeTwo: 未找到购买日 {} 的历史净值，回退到当前净值", buyDateStr);
+            }
+        }
+
+        // 最后回退：使用当前实时净值
+        if (effectiveNAV == null) {
+            FundData fundData = fundDataService.getFundData(userFund.getFundCode());
+            String currentNetValue = determineCurrentNetValue(fundData, isAfterTradingClose());
+            if (currentNetValue == null || currentNetValue.isEmpty() || currentNetValue.equals("null")) {
+                currentNetValue = fundData.getUnitNetValue();
+            }
+            effectiveNAV = new BigDecimal(currentNetValue != null && !currentNetValue.equals("null") ? currentNetValue : "1");
+            logger.warn("applyModeTwo: 使用当前实时净值 {} 计算份额（非精确）", effectiveNAV);
+        }
+
         BigDecimal profit;
         if (request.containsKey("profitRate") && request.get("profitRate") != null
                 && !request.get("profitRate").toString().isEmpty()) {
@@ -423,7 +590,7 @@ public class FundHoldingService {
         }
 
         BigDecimal costAmount = holdAmount.subtract(profit);
-        BigDecimal holdShare = holdAmount.divide(currentNAV, 2, RoundingMode.HALF_UP);
+        BigDecimal holdShare = holdAmount.divide(effectiveNAV, 2, RoundingMode.HALF_UP);
         BigDecimal costPrice = holdShare.compareTo(BigDecimal.ZERO) > 0
                 ? costAmount.divide(holdShare, 4, RoundingMode.HALF_UP)
                 : BigDecimal.ZERO;
