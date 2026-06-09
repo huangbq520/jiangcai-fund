@@ -54,7 +54,7 @@ body {
 .holding-list,
 .portfolio-summary,
 .search-fund,
-.allocation-chart,
+.chart-section,
 .market-index {
   transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1),
               box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1);
@@ -64,7 +64,7 @@ body {
 .holding-list:hover,
 .portfolio-summary:hover .summary-card,
 .search-fund:hover,
-.allocation-chart:hover,
+.chart-section:hover,
 .market-index:hover {
   transform: translateY(-3px);
   box-shadow: 0 8px 30px rgba(0, 0, 0, 0.1), 0 2px 8px rgba(0, 0, 0, 0.06) !important;

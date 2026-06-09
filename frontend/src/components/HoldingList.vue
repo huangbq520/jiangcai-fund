@@ -19,13 +19,13 @@
             class="delete-btn"
             :disabled="selectedFundCodes.size === 0"
           >
-            删除
+            <span>删除</span>
           </button>
           <button 
             @click="cancelBatchDelete" 
             class="cancel-btn"
           >
-            取消
+            <span>取消</span>
           </button>
         </div>
       </div>
@@ -380,7 +380,7 @@ const handleBatchDelete = async () => {
 .cancel-btn {
   background: transparent;
   position: relative;
-  padding: 5px 15px;
+  padding: 1px 5px;
   display: flex;
   align-items: center;
   font-size: 17px;
@@ -485,7 +485,7 @@ const handleBatchDelete = async () => {
 .refresh-btn {
   background: transparent;
   position: relative;
-  padding: 5px 15px;
+  padding: 1px 5px;
   display: flex;
   align-items: center;
   font-size: 17px;
