@@ -27,36 +27,42 @@
       <template v-else>
         <div class="summary-section">
           <div class="price-row">
-            <span class="current-price" :class="trendClass">{{ formatPrice(latestPrice) }}</span>
+            <span class="current-price" :class="trendClass">{{ formatPrice(displayData?.close) }}</span>
             <span class="price-change" :class="trendClass">
-              {{ formatChange(latestChange) }} &nbsp; {{ formatPercent(latestChangePercent) }}
+              {{ formatChange(displayData?.change) }} &nbsp; {{ formatPercent(displayData?.changePercent) }}
             </span>
           </div>
           <div class="metrics-grid">
             <div class="metric-item">
               <span class="metric-label">开盘价</span>
-              <span class="metric-value">{{ formatPrice(summary.open) }}</span>
+              <span class="metric-value">{{ formatPrice(displayData?.open) }}</span>
             </div>
             <div class="metric-item">
               <span class="metric-label">最高价</span>
-              <span class="metric-value up">{{ formatPrice(summary.high) }}</span>
+              <span class="metric-value up">{{ formatPrice(displayData?.high) }}</span>
             </div>
             <div class="metric-item">
               <span class="metric-label">最低价</span>
-              <span class="metric-value down">{{ formatPrice(summary.low) }}</span>
+              <span class="metric-value down">{{ formatPrice(displayData?.low) }}</span>
             </div>
             <div class="metric-item">
               <span class="metric-label">成交量</span>
-              <span class="metric-value">{{ formatVolume(summary.volume) }}</span>
+              <span class="metric-value">{{ formatVolume(displayData?.volume) }}</span>
             </div>
             <div class="metric-item">
               <span class="metric-label">成交额</span>
-              <span class="metric-value">{{ formatAmount(summary.amount) }}</span>
+              <span class="metric-value">{{ formatAmount(displayData?.amount) }}</span>
             </div>
             <div class="metric-item">
               <span class="metric-label">振幅</span>
-              <span class="metric-value">{{ formatPercent(summary.amplitude) }}</span>
+              <span class="metric-value">{{ formatPercent(displayData?.amplitude) }}</span>
             </div>
+          </div>
+          <div class="ma-row">
+            <span class="ma-tag">均线</span>
+            <span class="ma-tag ma5">M5 {{ displayMA.ma5 != null ? displayMA.ma5.toFixed(2) : '--' }}</span>
+            <span class="ma-tag ma10">M10 {{ displayMA.ma10 != null ? displayMA.ma10.toFixed(2) : '--' }}</span>
+            <span class="ma-tag ma20">M20 {{ displayMA.ma20 != null ? displayMA.ma20.toFixed(2) : '--' }}</span>
           </div>
         </div>
 
@@ -84,8 +90,6 @@
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { marketApi } from '../api'
 
-const echartsLib = window.echarts
-
 const props = defineProps({
   indexCode: { type: String, required: true },
   indexName: { type: String, required: true },
@@ -102,7 +106,29 @@ let volChart = null
 const loading = ref(false)
 const error = ref('')
 const klineData = ref([])
+let allKlineData = []
 const currentKlt = ref('101')
+const hoveredIdx = ref(-1)
+const ma5Values = ref([])
+const ma10Values = ref([])
+const ma20Values = ref([])
+
+const displayData = computed(() => {
+  if (!klineData.value.length) return null
+  const idx = hoveredIdx.value >= 0 && hoveredIdx.value < klineData.value.length
+    ? hoveredIdx.value : klineData.value.length - 1
+  return klineData.value[idx]
+})
+
+const displayMA = computed(() => {
+  const idx = hoveredIdx.value >= 0 && hoveredIdx.value < klineData.value.length
+    ? hoveredIdx.value : klineData.value.length - 1
+  return {
+    ma5: ma5Values.value[idx] ?? null,
+    ma10: ma10Values.value[idx] ?? null,
+    ma20: ma20Values.value[idx] ?? null
+  }
+})
 
 const periodGroups = [
   { label: '1分', value: '1' },
@@ -117,38 +143,10 @@ const periodGroups = [
   { label: '年K', value: '105' }
 ]
 
-const summary = computed(() => {
-  if (!klineData.value.length) return {}
-  const latest = klineData.value[klineData.value.length - 1]
-  return {
-    open: latest.open,
-    high: latest.high,
-    low: latest.low,
-    volume: latest.volume,
-    amount: latest.amount,
-    amplitude: latest.amplitude
-  }
-})
-
-const latestPrice = computed(() => {
-  if (!klineData.value.length) return null
-  return klineData.value[klineData.value.length - 1].close
-})
-
-const latestChange = computed(() => {
-  if (!klineData.value.length) return null
-  return klineData.value[klineData.value.length - 1].change
-})
-
-const latestChangePercent = computed(() => {
-  if (!klineData.value.length) return null
-  return klineData.value[klineData.value.length - 1].changePercent
-})
-
 const trendClass = computed(() => {
-  const c = latestChange.value
-  if (c == null) return ''
-  return Number(c) >= 0 ? 'up' : 'down'
+  const d = displayData.value
+  if (!d) return ''
+  return Number(d.change) >= 0 ? 'up' : 'down'
 })
 
 const formatPrice = (val) => {
@@ -179,6 +177,7 @@ const formatVolume = (val) => {
 const formatAmount = (val) => {
   if (val == null) return '--'
   const n = Number(val)
+  if (n >= 1e12) return (n / 1e12).toFixed(2) + '万亿元'
   if (n >= 1e8) return (n / 1e8).toFixed(2) + '亿元'
   if (n >= 1e4) return (n / 1e4).toFixed(2) + '万元'
   return n.toLocaleString() + '元'
@@ -207,7 +206,7 @@ const getDateRange = (klt) => {
       break
     case '103':
       start = new Date(now)
-      start.setFullYear(start.getFullYear() - 3)
+      start.setFullYear(start.getFullYear() - 7)
       break
     case '104':
     case '105':
@@ -228,24 +227,45 @@ const toDateStr = (d) => {
   return `${y}${m}${day}`
 }
 
+const calcMA = (data, period) => {
+  const result = []
+  for (let i = 0; i < data.length; i++) {
+    if (i < period - 1) {
+      result.push(null)
+    } else {
+      let sum = 0
+      for (let j = i - period + 1; j <= i; j++) sum += Number(data[j].close)
+      result.push(+(sum / period).toFixed(2))
+    }
+  }
+  return result
+}
+
 const fetchKline = async (klt) => {
   const { start, end } = getDateRange(klt)
   loading.value = true
   error.value = ''
+  hoveredIdx.value = -1
 
   try {
     const res = await marketApi.getKline(props.indexCode, start, end, klt)
-    if (res.code === 200 && res.data?.klines) {
-      klineData.value = res.data.klines
-      await nextTick()
-      renderCharts()
-    } else {
-      error.value = res.message || '加载失败'
-    }
-  } catch {
-    error.value = '网络错误，请重试'
-  } finally {
     loading.value = false
+    if (res.code === 200 && res.data?.klines && res.data.klines.length > 0) {
+      allKlineData = res.data.klines
+      klineData.value = allKlineData.slice(-50)
+      await nextTick()
+      try {
+        renderCharts()
+      } catch (chartErr) {
+        console.error('K线图表渲染失败:', chartErr)
+      }
+    } else {
+      error.value = res.message || '暂无K线数据'
+    }
+  } catch (e) {
+    console.error('获取K线数据失败:', e)
+    loading.value = false
+    error.value = '网络错误，请重试'
   }
 }
 
@@ -259,12 +279,18 @@ const switchPeriod = (klt) => {
 const colors = {
   up: '#e53935',
   down: '#009e5f',
+  upBorder: '#c62828',
+  downBorder: '#007a4d',
   upBg: '#fde8e8',
   downBg: '#e8f8e8'
 }
 
 const renderCharts = () => {
-  if (!mainChartRef.value || !volChartRef.value || !echartsLib) return
+  const echartsLib = window.echarts
+  if (!mainChartRef.value || !volChartRef.value || !echartsLib) {
+    if (!echartsLib) console.warn('ECharts 未加载')
+    return
+  }
   if (!klineData.value.length) return
 
   disposeCharts()
@@ -282,11 +308,24 @@ const renderCharts = () => {
     }
   })
 
-  // 计算Y轴范围
+  // 移动平均线：从全量数据计算后截取展示部分
+  const displayCount = klineData.value.length
+  ma5Values.value = calcMA(allKlineData, 5).slice(-displayCount)
+  ma10Values.value = calcMA(allKlineData, 10).slice(-displayCount)
+  ma20Values.value = calcMA(allKlineData, 20).slice(-displayCount)
+
+  // Y轴范围（含MA线数据）
   const allPrices = klineData.value.flatMap(d => [Number(d.high), Number(d.low)])
-  const yMin = Math.min(...allPrices)
-  const yMax = Math.max(...allPrices)
+  const maAll = [...ma5Values.value, ...ma10Values.value, ...ma20Values.value].filter(v => v != null)
+  const yMin = Math.min(...allPrices, ...maAll)
+  const yMax = Math.max(...allPrices, ...maAll)
   const yPad = (yMax - yMin) * 0.05
+
+  const minSpanPct = Math.min(100, Math.ceil(20 / dates.length * 100))
+
+  // 透明辅助 bar：每个 X 位置一个全高柱，让 chart.on('mousemove') 在任意位置触发
+  const barTop = yMax + yPad
+  const hitBars = klineData.value.map(() => barTop)
 
   const mainOption = {
     grid: { left: '8%', right: '2%', top: '3%', bottom: '12%' },
@@ -307,10 +346,11 @@ const renderCharts = () => {
       axisLabel: { color: '#94a3b8', fontSize: 10, formatter: v => v.toFixed(0) }
     },
     dataZoom: [
-      { type: 'inside', xAxisIndex: [0, 0], start: 0, end: 100 },
-      { type: 'slider', xAxisIndex: [0, 0], start: 0, end: 100, bottom: '2%', height: 18,
+      { type: 'inside', start: 0, end: 100, minSpan: minSpanPct },
+      { type: 'slider', start: 0, end: 100, bottom: '2%', height: 18,
         borderColor: '#e2e8f0', fillerColor: 'rgba(22,119,255,0.1)',
-        handleStyle: { color: '#1677ff' }, textStyle: { fontSize: 10, color: '#94a3b8' } }
+        handleStyle: { color: '#1677ff' }, textStyle: { fontSize: 10, color: '#94a3b8' },
+        minSpan: minSpanPct }
     ],
     tooltip: {
       trigger: 'axis',
@@ -322,31 +362,76 @@ const renderCharts = () => {
       textStyle: { color: '#e2e8f0', fontSize: 12 },
       formatter: (params) => {
         if (!params || !params.length) return ''
-        const d = klineData.value[params[0].dataIndex]
+        // 跳过辅助 bar，用 K线系列的数据索引
+        const klineParam = params.find(p => p.seriesName === 'K线') || params[0]
+        const d = klineData.value[klineParam.dataIndex]
         if (!d) return ''
-        const changeClass = Number(d.close) >= Number(d.open) ? '#e53935' : '#009e5f'
+        const changeClass = Number(d.change) >= 0 ? '#e53935' : '#009e5f'
         const sign = Number(d.change) >= 0 ? '+' : ''
-        return `<div style="font-weight:600;margin-bottom:6px;">${d.date}</div>
-          <div>开盘: <b>${d.open}</b></div>
-          <div>收盘: <b>${d.close}</b></div>
-          <div style="color:#e53935;">最高: <b>${d.high}</b></div>
-          <div style="color:#009e5f;">最低: <b>${d.low}</b></div>
-          <div style="margin-top:4px;color:${changeClass};">涨跌幅: <b>${sign}${d.changePercent}%</b></div>
-          <div>成交量: <b>${formatVolume(d.volume)}</b></div>
-          <div>成交额: <b>${formatAmount(d.amount)}</b></div>`
+        return `<div style="font-weight:600;">${d.date}</div>
+          <div style="margin-top:3px;color:#ffffff;">开 <b>${d.open}</b></div>
+          <div style="color:#e53935;">高 <b>${d.high}</b></div>
+          <div style="color:#009e5f;">低 <b>${d.low}</b></div>
+          <div style="color:${changeClass};">涨跌幅 <b>${sign}${d.changePercent}%</b></div>
+          <div style="color:${changeClass};">涨跌额 <b>${sign}${Number(d.change).toFixed(2)}</b></div>`
       }
     },
-    series: [{
-      type: 'candlestick',
-      data: ohlc,
-      itemStyle: {
-        color: colors.up,
-        color0: colors.down,
-        borderColor: colors.up,
-        borderColor0: colors.down
+    series: [
+      // 透明辅助 bar：每个 X 位置一个全高柱，覆盖整个绘图区域，确保任意位置都能触发 mousemove
+      {
+        name: '_hit',
+        type: 'bar',
+        data: hitBars,
+        barWidth: '80%',
+        z: -10,
+        itemStyle: { color: 'transparent', borderColor: 'transparent', borderWidth: 0 },
+        emphasis: { itemStyle: { color: 'transparent' } },
+        tooltip: { show: false }
       },
-      barMaxWidth: 20
-    }]
+      {
+        name: 'K线',
+        type: 'candlestick',
+        data: ohlc,
+        itemStyle: {
+          color: colors.up,
+          color0: colors.down,
+          borderColor: colors.upBorder,
+          borderColor0: colors.downBorder
+        },
+        barMaxWidth: 20,
+        z: 1
+      },
+      {
+        name: 'MA5',
+        type: 'line',
+        data: ma5Values.value,
+        smooth: true,
+        symbol: 'none',
+        lineStyle: { width: 1, color: '#f5a623' },
+        itemStyle: { color: '#f5a623' },
+        z: 2
+      },
+      {
+        name: 'MA10',
+        type: 'line',
+        data: ma10Values.value,
+        smooth: true,
+        symbol: 'none',
+        lineStyle: { width: 1, color: '#4a90d9' },
+        itemStyle: { color: '#4a90d9' },
+        z: 2
+      },
+      {
+        name: 'MA20',
+        type: 'line',
+        data: ma20Values.value,
+        smooth: true,
+        symbol: 'none',
+        lineStyle: { width: 1, color: '#b44bcb' },
+        itemStyle: { color: '#b44bcb' },
+        z: 2
+      }
+    ]
   }
 
   const volMax = Math.max(...volumes.map(v => v.value))
@@ -374,8 +459,8 @@ const renderCharts = () => {
       }}
     },
     dataZoom: [
-      { type: 'inside', xAxisIndex: [0, 0], start: 0, end: 100 },
-      { type: 'slider', show: false, start: 0, end: 100 }
+      { type: 'inside', start: 0, end: 100, minSpan: minSpanPct },
+      { type: 'slider', show: false, start: 0, end: 100, minSpan: minSpanPct }
     ],
     series: [{
       type: 'bar',
@@ -387,45 +472,38 @@ const renderCharts = () => {
   mainChart.setOption(mainOption)
   volChart.setOption(volOption)
 
-  // 联动 dataZoom
-  mainChart.on('dataZoom', (params) => {
-    if (volChart && !volChart.isDisposed()) {
-      volChart.dispatchAction({
-        type: 'dataZoom',
-        dataZoomIndex: 0,
-        start: params.start != null ? params.start : mainChart.getOption().dataZoom[0].start,
-        end: params.end != null ? params.end : mainChart.getOption().dataZoom[0].end
-      })
-    }
-  })
+  // 使用 ECharts 原生 connect 同步 dataZoom，避免递归卡顿
+  mainChart.group = 'klineGroup'
+  volChart.group = 'klineGroup'
+  echartsLib.connect('klineGroup')
 
-  volChart.on('dataZoom', (params) => {
-    if (mainChart && !mainChart.isDisposed()) {
-      mainChart.dispatchAction({
-        type: 'dataZoom',
-        dataZoomIndex: 0,
-        start: params.start != null ? params.start : volChart.getOption().dataZoom[0].start,
-        end: params.end != null ? params.end : volChart.getOption().dataZoom[0].end
-      })
-    }
-  })
-
-  // 十字线联动
-  mainChart.on('mousemove', (params) => {
-    if (volChart && !volChart.isDisposed()) {
-      volChart.dispatchAction({ type: 'showTip', seriesIndex: 0, dataIndex: params.dataIndex })
-    }
-  })
-  mainChart.on('mouseout', () => {
-    if (volChart && !volChart.isDisposed()) {
-      volChart.dispatchAction({ type: 'hideTip' })
-    }
-  })
+  // mousemove：透明辅助 bar 覆盖每个 X 位置全高，确保任意位置都能触发
+  // 注意：不手动 dispatch showTip/hideTip，echarts.connect() 已自动同步两图 tooltip
+  const onMainMove = (params) => {
+    if (params.dataIndex != null) hoveredIdx.value = params.dataIndex
+  }
+  mainChart.on('mousemove', onMainMove)
+  volChart.on('mousemove', onMainMove)
+  // 用父容器 mouseleave 统一处理离开，避免两图间切换时误重置
+  const chartArea = mainChartRef.value.parentElement
+  if (chartArea) {
+    chartArea.addEventListener('mouseleave', () => { hoveredIdx.value = -1 })
+  }
 }
 
 const disposeCharts = () => {
-  if (mainChart && !mainChart.isDisposed()) { mainChart.dispose(); mainChart = null }
-  if (volChart && !volChart.isDisposed()) { volChart.dispose(); volChart = null }
+  const echartsLib = window.echarts
+  if (mainChart && !mainChart.isDisposed()) {
+    mainChart.group = null
+    mainChart.dispose()
+    mainChart = null
+  }
+  if (volChart && !volChart.isDisposed()) {
+    volChart.group = null
+    volChart.dispose()
+    volChart = null
+  }
+  if (echartsLib) echartsLib.disconnect('klineGroup')
 }
 
 const handleResize = () => {
@@ -450,6 +528,7 @@ watch(() => props.indexCode, (newCode) => {
 
 onMounted(() => {
   window.addEventListener('resize', handleResize)
+  if (props.visible && props.indexCode) fetchKline(currentKlt.value)
 })
 
 onUnmounted(() => {
@@ -627,6 +706,28 @@ onUnmounted(() => {
 .metric-value.up { color: #e53935; }
 .metric-value.down { color: #009e5f; }
 
+/* ---- MA Row ---- */
+.ma-row {
+  display: flex;
+  gap: 14px;
+  padding-top: 10px;
+  margin-top: 10px;
+  border-top: 1px solid #f1f5f9;
+}
+
+.ma-tag {
+  font-size: 12px;
+  font-weight: 500;
+  padding: 1px 8px;
+  border-radius: 3px;
+  border-left: 1px solid;
+}
+
+
+.ma-tag.ma5  { color: #b8861a; border-left-color: #f5a623; background: rgba(245,166,35,0.05); }
+.ma-tag.ma10 { color: #3874b4; border-left-color: #4a90d9; background: rgba(74,144,217,0.05); }
+.ma-tag.ma20 { color: #8e3ea3; border-left-color: #b44bcb; background: rgba(180,75,203,0.05); }
+
 /* ---- Period Bar ---- */
 .period-bar {
   display: flex;
@@ -686,7 +787,7 @@ onUnmounted(() => {
 .pl__ring--a { stroke: #f42f25; }
 .pl__ring--b { animation-name: ringB; stroke: #ffdd00; }
 .pl__ring--c { animation-name: ringC; stroke: #255ff4; }
-.pl__ring--d { animation-name: ringD; stroke: #2cf425; }
+.pl__ring--d { animation-name: ringD; stroke: #255ff4; }
 
 @keyframes ringA {
   from, 4% { stroke-dasharray: 0 660; stroke-width: 20; stroke-dashoffset: -330; }
@@ -719,49 +820,13 @@ onUnmounted(() => {
 }
 
 @keyframes ringD {
-  from, 8% {
-    stroke-dasharray: 0 440;
-    stroke-width: 20;
-    stroke-dashoffset: 0;
-  }
-
-  16% {
-    stroke-dasharray: 40 400;
-    stroke-width: 30;
-    stroke-dashoffset: -5;
-  }
-
-  36% {
-    stroke-dasharray: 40 400;
-    stroke-width: 30;
-    stroke-dashoffset: -175;
-  }
-
-  44%,
-  50% {
-    stroke-dasharray: 0 440;
-    stroke-width: 20;
-    stroke-dashoffset: -220;
-  }
-
-  58% {
-    stroke-dasharray: 40 400;
-    stroke-width: 30;
-    stroke-dashoffset: -225;
-  }
-
-  78% {
-    stroke-dasharray: 40 400;
-    stroke-width: 30;
-    stroke-dashoffset: -395;
-  }
-
-  86%,
-  to {
-    stroke-dasharray: 0 440;
-    stroke-width: 20;
-    stroke-dashoffset: -440;
-  }
+  from { stroke-dasharray: 0 440; stroke-width: 20; stroke-dashoffset: 0; }
+  8% { stroke-dasharray: 40 400; stroke-width: 30; stroke-dashoffset: -5; }
+  28% { stroke-dasharray: 40 400; stroke-width: 30; stroke-dashoffset: -175; }
+  36%, 58% { stroke-dasharray: 0 440; stroke-width: 20; stroke-dashoffset: -220; }
+  66% { stroke-dasharray: 40 400; stroke-width: 30; stroke-dashoffset: -225; }
+  86% { stroke-dasharray: 40 400; stroke-width: 30; stroke-dashoffset: -395; }
+  94%, to { stroke-dasharray: 0 440; stroke-width: 20; stroke-dashoffset: -440; }
 }
 
 @media (max-width: 768px) {

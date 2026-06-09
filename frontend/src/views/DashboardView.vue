@@ -118,15 +118,18 @@ const closeDetail = () => {
 
 <style scoped>
 .app-header {
-  background: #e8e8e8;
+  background: rgba(232, 232, 232, 0.92);
   backdrop-filter: blur(10px);
-  padding: 12px 30px;
+  padding: 12px 24px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
   display: flex;
   justify-content: space-between;
   align-items: center;
-  position: relative;
-  z-index: 10;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
 }
 
 .logo-wrapper {
@@ -145,7 +148,7 @@ const closeDetail = () => {
 .header-actions {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
   flex-shrink: 0;
 }
 
@@ -153,8 +156,8 @@ const closeDetail = () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 38px;
-  height: 38px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
   border: 2px solid rgba(0, 0, 0, 0.1);
   background: rgba(255, 255, 255, 0.6);
@@ -172,15 +175,15 @@ const closeDetail = () => {
 }
 
 .github-icon {
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
   fill: currentColor;
 }
 
 .logo-wrapper h1 {
   margin: 0;
   color: #333;
-  font-size: 26px;
+  font-size: 20px;
   font-weight: 700;
   background: #1677ff;
   -webkit-background-clip: text;
@@ -195,11 +198,13 @@ const closeDetail = () => {
   --color-four: #bf4a1d80;
   --color-five: #ffbf4740;
   --time-animation: 2s;
-  --size: 0.6;
+  --size: 0.5;
+  width: calc(100px * var(--size));
+  height: calc(100px * var(--size));
   position: relative;
   border-radius: 50%;
   transform: scale(var(--size));
-  transform-origin: center;
+  transform-origin: top left;
   box-shadow:
     0 0 25px 0 var(--color-three),
     0 20px 50px 0 var(--color-four);
@@ -336,9 +341,8 @@ const closeDetail = () => {
 .app-main {
   max-width: 1200px;
   margin: 0 auto;
-  padding: 30px 20px;
+  padding: 82px 20px 30px;
   position: relative;
-  z-index: 1;
 }
 
 .market-section {

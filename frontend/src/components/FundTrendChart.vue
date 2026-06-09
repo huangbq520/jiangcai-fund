@@ -466,7 +466,7 @@ const renderChart = () => {
   // ========== ECharts 配置 ==========
   const option = {
     animation: true,
-    animationDuration: 800,
+    animationDuration: 300,
     animationEasing: 'cubicOut',
     tooltip: {
       trigger: 'axis',

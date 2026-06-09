@@ -292,11 +292,11 @@ onUnmounted(() => {
 
 .search-fund.compact .camera-btn {
   position: absolute;
-  left: 10px;
+  left: 8px;
   top: 50%;
   transform: translateY(-50%);
-  width: 28px;
-  height: 28px;
+  width: 22px;
+  height: 22px;
   border: none;
   background: transparent;
   color: #999;
@@ -316,9 +316,9 @@ onUnmounted(() => {
 }
 
 .search-fund.compact .search-input {
-  padding: 10px 50px 10px 44px;
+  padding: 7px 44px 7px 36px;
   border-radius: 20px;
-  font-size: 14px;
+  font-size: 13px;
   background: rgba(255, 255, 255, 0.7);
   border: 1px solid rgba(0, 0, 0, 0.08);
 }
@@ -357,12 +357,12 @@ onUnmounted(() => {
 }
 
 .search-fund.compact .search-btn {
-  right: 6px;
-  top: 6px;
-  bottom: 6px;
-  padding: 6px 14px;
+  right: 4px;
+  top: 4px;
+  bottom: 4px;
+  padding: 4px 12px;
   border-radius: 16px;
-  font-size: 13px;
+  font-size: 12px;
   box-shadow: none;
   cursor: pointer;
   display: flex;

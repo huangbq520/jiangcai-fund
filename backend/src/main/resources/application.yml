@@ -6,9 +6,9 @@ spring:
     name: fund-management
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://localhost:3306/jiangcai_fund?useUnicode=true&characterEncoding=utf8
+    url: jdbc:mysql://localhost:3306/jiangcaifund?useUnicode=true&characterEncoding=utf8
     username: root
-    password: 518680
+    password: 7454088
   redis:
     host: localhost
     port: 6379
